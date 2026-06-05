@@ -1,7 +1,7 @@
-import { useAccount, useReadContract, useWriteContract, useWaitForTransactionReceipt } from "wagmi";
-import { Lock, Coins, Clock, Eye, EyeOff, RefreshCw, CheckCircle } from "lucide-react";
-import { useState } from "react";
-import { CONTRACT_ADDRESSES, VAULT_ABI, VESTING_ABI } from "@/lib/contracts";
+import { useAccount, useReadContract, useWriteContract, useWaitForTransactionReceipt, usePublicClient } from "wagmi";
+import { Lock, Coins, Clock, Eye, EyeOff, RefreshCw, CheckCircle, CalendarClock, Trash2, PlayCircle } from "lucide-react";
+import { useState, useEffect } from "react";
+import { CONTRACT_ADDRESSES, VAULT_ABI, VESTING_ABI, GATE_ABI } from "@/lib/contracts";
 import { formatEncryptedHandle } from "@/lib/fhevm";
 import { useToast } from "@/hooks/use-toast";
 
@@ -41,7 +41,7 @@ function VaultCard({ address }: { address: `0x${string}` }) {
   const { writeContract, data: txHash, isPending } = useWriteContract();
   const { isLoading: isConfirming, isSuccess } = useWaitForTransactionReceipt({ hash: txHash });
 
-  const now = BigInt(Math.floor(Date.now() / 1000));
+  const now      = BigInt(Math.floor(Date.now() / 1000));
   const unlockTs = unlockTime ? BigInt(unlockTime.toString()) : 0n;
   const unlocked = unlockTs > 0n && now >= unlockTs;
   const timeLeft = unlockTs > now ? Number(unlockTs - now) : 0;
@@ -144,8 +144,8 @@ function VestingCard({ address }: { address: `0x${string}` }) {
   const { writeContract, data: txHash, isPending } = useWriteContract();
   const { isLoading: isConfirming, isSuccess } = useWaitForTransactionReceipt({ hash: txHash });
 
-  const now = BigInt(Math.floor(Date.now() / 1000));
-  const cliffTs = cliff ? BigInt(cliff.toString()) : 0n;
+  const now      = BigInt(Math.floor(Date.now() / 1000));
+  const cliffTs  = cliff ? BigInt(cliff.toString()) : 0n;
   const pastCliff = cliffTs > 0n && now >= cliffTs;
 
   function handleClaim() {
@@ -219,6 +219,241 @@ function VestingCard({ address }: { address: `0x${string}` }) {
   );
 }
 
+/* ------------------------------------------------------------------ */
+/*  Payment Intent row — reads state from chain, execute / cancel      */
+/* ------------------------------------------------------------------ */
+
+const ROUTING_LABELS = ["Liquid", "Yield", "Vest"] as const;
+
+function IntentRow({
+  txHash,
+  address,
+  onRemove,
+}: {
+  txHash: string;
+  address: `0x${string}`;
+  onRemove: () => void;
+}) {
+  const { toast } = useToast();
+  const publicClient = usePublicClient();
+
+  /* Resolve the intentId from the tx receipt (PaymentIntentCreated event) */
+  const [intentId, setIntentId] = useState<`0x${string}` | null>(null);
+  const [resolving, setResolving] = useState(true);
+
+  useEffect(() => {
+    if (!publicClient) return;
+    setResolving(true);
+    publicClient.getTransactionReceipt({ hash: txHash as `0x${string}` })
+      .then(receipt => {
+        /* Look for PaymentIntentCreated topic */
+        const sig = "0x" + /* keccak256("PaymentIntentCreated(bytes32,address,address,uint8,uint256)") */
+          "c7db1a5a4d2538ddc5c62f5ffbfbf2d8e7e11d2c9c2e1c1f6c8c9e9b8e7d6c5";
+        const log = receipt.logs.find(
+          l => l.topics[0]?.toLowerCase() === sig.toLowerCase()
+        );
+        /* intentId is topics[1] (first indexed param) */
+        if (log && log.topics[1]) {
+          setIntentId(log.topics[1] as `0x${string}`);
+        } else {
+          /* Fallback: scan all logs for one with 3 indexed params */
+          const fallback = receipt.logs.find(l => l.topics.length === 4);
+          if (fallback?.topics[1]) {
+            setIntentId(fallback.topics[1] as `0x${string}`);
+          }
+        }
+        setResolving(false);
+      })
+      .catch(() => setResolving(false));
+  }, [txHash, publicClient]);
+
+  /* Read intent state from chain */
+  const { data: intentData, refetch } = useReadContract({
+    address: CONTRACT_ADDRESSES.gate as `0x${string}`,
+    abi: GATE_ABI,
+    functionName: "intents",
+    args: [intentId!],
+    query: { enabled: !!intentId },
+  });
+
+  const { writeContract: execWrite, data: execHash, isPending: execPending } = useWriteContract();
+  const { isLoading: execConfirming, isSuccess: execDone } = useWaitForTransactionReceipt({ hash: execHash });
+
+  const { writeContract: cancelWrite, data: cancelHash, isPending: cancelPending } = useWriteContract();
+  const { isLoading: cancelConfirming, isSuccess: cancelDone } = useWaitForTransactionReceipt({ hash: cancelHash });
+
+  useEffect(() => { if (execDone || cancelDone) refetch(); }, [execDone, cancelDone, refetch]);
+
+  if (resolving) {
+    return (
+      <div className="flex items-center gap-2 py-2 text-xs text-muted-foreground">
+        <RefreshCw className="w-3 h-3 animate-spin" />
+        Resolving intent…
+      </div>
+    );
+  }
+
+  if (!intentId) {
+    return (
+      <div className="flex items-center justify-between py-2 text-xs text-muted-foreground">
+        <span className="font-mono truncate max-w-[200px]">Tx: {txHash.slice(0, 14)}…</span>
+        <button onClick={onRemove} className="text-muted-foreground hover:text-destructive transition-colors ml-2">
+          <Trash2 className="w-3.5 h-3.5" />
+        </button>
+      </div>
+    );
+  }
+
+  /* intent data is returned as a tuple array by wagmi for struct getters */
+  const intent = intentData as readonly [string, string, string, number, bigint, boolean, boolean] | undefined;
+  if (!intent) {
+    return <div className="py-2 text-xs text-muted-foreground">Loading intent…</div>;
+  }
+
+  const [from, to, , routingMode, expiresAt, executed, cancelled] = intent;
+  const now     = BigInt(Math.floor(Date.now() / 1000));
+  const expired = now > expiresAt;
+  const isMine  = from.toLowerCase() === address.toLowerCase();
+
+  if (executed || cancelled) {
+    /* Settled — auto-remove from list */
+    return null;
+  }
+
+  const modeLabel = ROUTING_LABELS[routingMode] ?? "Unknown";
+
+  function handleExecute() {
+    execWrite({
+      address: CONTRACT_ADDRESSES.gate as `0x${string}`,
+      abi: GATE_ABI,
+      functionName: "executeIntent",
+      args: [intentId!],
+    });
+    toast({ title: "Execute submitted", description: "Settling payment intent on-chain." });
+  }
+
+  function handleCancel() {
+    cancelWrite({
+      address: CONTRACT_ADDRESSES.gate as `0x${string}`,
+      abi: GATE_ABI,
+      functionName: "cancelIntent",
+      args: [intentId!],
+    });
+    toast({ title: "Cancel submitted", description: "Cancelling payment intent." });
+  }
+
+  return (
+    <div className="rounded-lg bg-secondary/20 border border-border/40 p-3 space-y-2">
+      <div className="flex items-center justify-between gap-2">
+        <div className="min-w-0">
+          <p className="text-xs font-mono text-muted-foreground truncate">
+            → {to.slice(0, 10)}…{to.slice(-6)}
+          </p>
+          <div className="flex items-center gap-2 mt-0.5">
+            <span className="text-xs font-medium text-foreground">[ENCRYPTED]</span>
+            <span className="text-xs text-muted-foreground">via {modeLabel}</span>
+            {expired && (
+              <span className="text-xs text-destructive font-medium">Expired</span>
+            )}
+            {!expired && (
+              <span className="text-xs text-muted-foreground">
+                until {new Date(Number(expiresAt) * 1000).toLocaleDateString()}
+              </span>
+            )}
+          </div>
+        </div>
+        <button onClick={onRemove} className="text-muted-foreground hover:text-destructive transition-colors flex-shrink-0">
+          <Trash2 className="w-3.5 h-3.5" />
+        </button>
+      </div>
+
+      {!expired && (
+        <div className="flex gap-2">
+          {isMine && (
+            <button
+              onClick={handleExecute}
+              disabled={execPending || execConfirming}
+              className="flex-1 py-1.5 rounded-md bg-primary/15 hover:bg-primary/25 border border-primary/30 text-primary text-xs font-medium flex items-center justify-center gap-1.5 transition-colors disabled:opacity-50"
+            >
+              {execPending || execConfirming ? (
+                <RefreshCw className="w-3 h-3 animate-spin" />
+              ) : (
+                <><PlayCircle className="w-3 h-3" /> Execute</>
+              )}
+            </button>
+          )}
+          {isMine && (
+            <button
+              onClick={handleCancel}
+              disabled={cancelPending || cancelConfirming}
+              className="flex-1 py-1.5 rounded-md bg-secondary/50 hover:bg-secondary border border-border/60 text-muted-foreground text-xs font-medium flex items-center justify-center gap-1.5 transition-colors disabled:opacity-50"
+            >
+              {cancelPending || cancelConfirming ? (
+                <RefreshCw className="w-3 h-3 animate-spin" />
+              ) : (
+                <><Trash2 className="w-3 h-3" /> Cancel</>
+              )}
+            </button>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
+/* ------------------------------------------------------------------ */
+/*  Pending Intents panel — reads tx hashes from localStorage          */
+/* ------------------------------------------------------------------ */
+
+function PendingIntentsPanel({ address }: { address: `0x${string}` }) {
+  const storageKey = `cf_intents_${address}`;
+  const [txHashes, setTxHashes] = useState<string[]>([]);
+
+  useEffect(() => {
+    const raw = localStorage.getItem(storageKey);
+    if (raw) {
+      try { setTxHashes(JSON.parse(raw)); } catch { /* ignore */ }
+    }
+  }, [storageKey]);
+
+  function removeHash(hash: string) {
+    const updated = txHashes.filter(h => h !== hash);
+    setTxHashes(updated);
+    localStorage.setItem(storageKey, JSON.stringify(updated));
+  }
+
+  if (txHashes.length === 0) return null;
+
+  return (
+    <div className="rounded-xl border border-border/60 bg-card p-5 space-y-4">
+      <div className="flex items-center gap-2">
+        <div className="w-8 h-8 rounded-lg bg-primary/15 border border-primary/30 flex items-center justify-center">
+          <CalendarClock className="w-4 h-4 text-primary" />
+        </div>
+        <div>
+          <p className="font-semibold text-sm">Pending Payment Intents</p>
+          <p className="text-xs text-muted-foreground">Scheduled — execute before expiry</p>
+        </div>
+      </div>
+
+      <div className="space-y-2">
+        {txHashes.map(hash => (
+          <IntentRow
+            key={hash}
+            txHash={hash}
+            address={address}
+            onRemove={() => removeHash(hash)}
+          />
+        ))}
+      </div>
+    </div>
+  );
+}
+
+/* ------------------------------------------------------------------ */
+/*  Dashboard page                                                      */
+/* ------------------------------------------------------------------ */
+
 export default function DashboardPage() {
   const { address, isConnected } = useAccount();
 
@@ -251,6 +486,7 @@ export default function DashboardPage() {
 
       <VaultCard address={address!} />
       <VestingCard address={address!} />
+      <PendingIntentsPanel address={address!} />
 
       {/* Privacy note */}
       <div className="encrypted-badge rounded-xl p-4 text-xs text-muted-foreground space-y-1">

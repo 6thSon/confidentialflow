@@ -326,4 +326,188 @@ describe("ConfidentialPaymentGate", function () {
         );
         expect(gateBal).to.equal(8_000n);
     });
+
+    /* ------------------------------------------------------------------
+     * Test 13: createPaymentIntent stores intent and emits event
+     * ------------------------------------------------------------------ */
+    it("createPaymentIntent stores intent data and emits PaymentIntentCreated", async function () {
+        const aliceAddr = await alice.getAddress();
+        const bobAddr   = await bob.getAddress();
+        const gateAddr  = await gate.getAddress();
+
+        const expiresAt = BigInt(Math.floor(Date.now() / 1000)) + 86400n; // 24 h
+
+        const intentInput = hre.fhevm.createEncryptedInput(gateAddr, aliceAddr);
+        intentInput.add64(500n);
+        const { handles, inputProof } = await intentInput.encrypt();
+
+        const tx = await gate.connect(alice).createPaymentIntent(
+            bobAddr, handles[0], inputProof, 0, expiresAt
+        );
+
+        /* Verify event */
+        await expect(Promise.resolve(tx))
+            .to.emit(gate, "PaymentIntentCreated")
+            .withArgs(anyValue, aliceAddr, bobAddr, 0, expiresAt);
+
+        /* Extract intentId and verify storage */
+        const receipt = await tx.wait();
+        const iface   = gate.interface;
+        const parsed  = receipt!.logs
+            .map(l => { try { return iface.parseLog(l); } catch { return null; } })
+            .find(e => e?.name === "PaymentIntentCreated");
+
+        expect(parsed).to.not.be.null;
+        const intentId = parsed!.args.intentId as string;
+
+        const intent = await gate.intents(intentId);
+        expect(intent.from).to.equal(aliceAddr);
+        expect(intent.to).to.equal(bobAddr);
+        expect(intent.routingMode).to.equal(0);
+        expect(intent.expiresAt).to.equal(expiresAt);
+        expect(intent.executed).to.be.false;
+        expect(intent.cancelled).to.be.false;
+    });
+
+    /* ------------------------------------------------------------------
+     * Test 14: intent creator can execute intent (liquid mode)
+     * ------------------------------------------------------------------ */
+    it("intent creator can execute intent and PaymentIntentSettled is emitted", async function () {
+        await aliceDeposits();
+
+        const aliceAddr = await alice.getAddress();
+        const bobAddr   = await bob.getAddress();
+        const gateAddr  = await gate.getAddress();
+
+        const expiresAt = BigInt(Math.floor(Date.now() / 1000)) + 86400n;
+
+        const intentInput = hre.fhevm.createEncryptedInput(gateAddr, aliceAddr);
+        intentInput.add64(500n);
+        const { handles, inputProof } = await intentInput.encrypt();
+
+        const createTx = await gate.connect(alice).createPaymentIntent(
+            bobAddr, handles[0], inputProof, 0, expiresAt
+        );
+        const receipt = await createTx.wait();
+        const iface   = gate.interface;
+        const parsed  = receipt!.logs
+            .map(l => { try { return iface.parseLog(l); } catch { return null; } })
+            .find(e => e?.name === "PaymentIntentCreated");
+        const intentId = parsed!.args.intentId as string;
+
+        /* Creator executes */
+        await expect(gate.connect(alice).executeIntent(intentId))
+            .to.emit(gate, "PaymentIntentSettled")
+            .withArgs(intentId, anyValue);
+
+        /* Intent marked executed */
+        const intent = await gate.intents(intentId);
+        expect(intent.executed).to.be.true;
+    });
+
+    /* ------------------------------------------------------------------
+     * Test 15: authorized protocol can execute an intent
+     * ------------------------------------------------------------------ */
+    it("authorized protocol can execute a payment intent", async function () {
+        await aliceDeposits();
+
+        const aliceAddr = await alice.getAddress();
+        const bobAddr   = await bob.getAddress();
+        const carolAddr = await carol.getAddress();
+        const gateAddr  = await gate.getAddress();
+
+        /* Register carol as a protocol */
+        await gate.connect(admin).registerProtocol(carolAddr, "TestProtocol");
+
+        const expiresAt = BigInt(Math.floor(Date.now() / 1000)) + 86400n;
+
+        const intentInput = hre.fhevm.createEncryptedInput(gateAddr, aliceAddr);
+        intentInput.add64(500n);
+        const { handles, inputProof } = await intentInput.encrypt();
+
+        const createTx = await gate.connect(alice).createPaymentIntent(
+            bobAddr, handles[0], inputProof, 0, expiresAt
+        );
+        const receipt = await createTx.wait();
+        const iface   = gate.interface;
+        const parsed  = receipt!.logs
+            .map(l => { try { return iface.parseLog(l); } catch { return null; } })
+            .find(e => e?.name === "PaymentIntentCreated");
+        const intentId = parsed!.args.intentId as string;
+
+        /* Authorized protocol executes */
+        await expect(gate.connect(carol).executeIntent(intentId))
+            .to.emit(gate, "PaymentIntentSettled")
+            .withArgs(intentId, anyValue);
+    });
+
+    /* ------------------------------------------------------------------
+     * Test 16: executeIntent reverts when intent is expired
+     * ------------------------------------------------------------------ */
+    it("reverts executeIntent when intent is past expiry", async function () {
+        await aliceDeposits();
+
+        const aliceAddr = await alice.getAddress();
+        const bobAddr   = await bob.getAddress();
+        const gateAddr  = await gate.getAddress();
+
+        /* Use actual chain timestamp (may differ from wall clock after prior evm_increaseTime calls) */
+        const latestBlock = await ethers.provider.getBlock("latest");
+        const expiresAt   = BigInt(latestBlock!.timestamp) + 30n;
+
+        const intentInput = hre.fhevm.createEncryptedInput(gateAddr, aliceAddr);
+        intentInput.add64(100n);
+        const { handles, inputProof } = await intentInput.encrypt();
+
+        const createTx = await gate.connect(alice).createPaymentIntent(
+            bobAddr, handles[0], inputProof, 0, expiresAt
+        );
+        const receipt = await createTx.wait();
+        const iface   = gate.interface;
+        const parsed  = receipt!.logs
+            .map(l => { try { return iface.parseLog(l); } catch { return null; } })
+            .find(e => e?.name === "PaymentIntentCreated");
+        const intentId = parsed!.args.intentId as string;
+
+        /* Advance EVM time well past expiry */
+        await (hre as any).network.provider.send("evm_increaseTime", [120]);
+        await (hre as any).network.provider.send("evm_mine", []);
+
+        await expect(gate.connect(alice).executeIntent(intentId))
+            .to.be.revertedWith("ConfidentialPaymentGate: intent expired");
+    });
+
+    /* ------------------------------------------------------------------
+     * Test 17: executeIntent reverts when already executed
+     * ------------------------------------------------------------------ */
+    it("reverts executeIntent when intent is already executed", async function () {
+        await aliceDeposits();
+
+        const aliceAddr = await alice.getAddress();
+        const bobAddr   = await bob.getAddress();
+        const gateAddr  = await gate.getAddress();
+
+        const expiresAt = BigInt(Math.floor(Date.now() / 1000)) + 86400n;
+
+        const intentInput = hre.fhevm.createEncryptedInput(gateAddr, aliceAddr);
+        intentInput.add64(100n);
+        const { handles, inputProof } = await intentInput.encrypt();
+
+        const createTx = await gate.connect(alice).createPaymentIntent(
+            bobAddr, handles[0], inputProof, 0, expiresAt
+        );
+        const receipt = await createTx.wait();
+        const iface   = gate.interface;
+        const parsed  = receipt!.logs
+            .map(l => { try { return iface.parseLog(l); } catch { return null; } })
+            .find(e => e?.name === "PaymentIntentCreated");
+        const intentId = parsed!.args.intentId as string;
+
+        /* First execution succeeds */
+        await gate.connect(alice).executeIntent(intentId);
+
+        /* Second execution must revert */
+        await expect(gate.connect(alice).executeIntent(intentId))
+            .to.be.revertedWith("ConfidentialPaymentGate: already executed");
+    });
 });

@@ -34,12 +34,16 @@ export interface ConfidentialPaymentGateInterface extends Interface {
       | "admin"
       | "authorizedProtocols"
       | "cUSDT"
+      | "cancelIntent"
       | "confidentialProtocolId"
+      | "createPaymentIntent"
       | "deposit"
+      | "executeIntent"
       | "flowRegistry"
       | "getBalance"
       | "getRegisteredProtocols"
       | "hasBalance"
+      | "intents"
       | "protocolNames"
       | "registerProtocol"
       | "revokeProtocol"
@@ -57,6 +61,9 @@ export interface ConfidentialPaymentGateInterface extends Interface {
     nameOrSignatureOrTopic:
       | "AdminTransferred"
       | "Deposited"
+      | "PaymentIntentCancelled"
+      | "PaymentIntentCreated"
+      | "PaymentIntentSettled"
       | "PaymentRouted"
       | "ProtocolRegistered"
       | "ProtocolRevoked"
@@ -90,12 +97,24 @@ export interface ConfidentialPaymentGateInterface extends Interface {
   ): string;
   encodeFunctionData(functionFragment: "cUSDT", values?: undefined): string;
   encodeFunctionData(
+    functionFragment: "cancelIntent",
+    values: [BytesLike]
+  ): string;
+  encodeFunctionData(
     functionFragment: "confidentialProtocolId",
     values?: undefined
   ): string;
   encodeFunctionData(
+    functionFragment: "createPaymentIntent",
+    values: [AddressLike, BytesLike, BytesLike, BigNumberish, BigNumberish]
+  ): string;
+  encodeFunctionData(
     functionFragment: "deposit",
     values: [BytesLike, BytesLike]
+  ): string;
+  encodeFunctionData(
+    functionFragment: "executeIntent",
+    values: [BytesLike]
   ): string;
   encodeFunctionData(
     functionFragment: "flowRegistry",
@@ -113,6 +132,7 @@ export interface ConfidentialPaymentGateInterface extends Interface {
     functionFragment: "hasBalance",
     values: [AddressLike]
   ): string;
+  encodeFunctionData(functionFragment: "intents", values: [BytesLike]): string;
   encodeFunctionData(
     functionFragment: "protocolNames",
     values: [AddressLike]
@@ -182,10 +202,22 @@ export interface ConfidentialPaymentGateInterface extends Interface {
   ): Result;
   decodeFunctionResult(functionFragment: "cUSDT", data: BytesLike): Result;
   decodeFunctionResult(
+    functionFragment: "cancelIntent",
+    data: BytesLike
+  ): Result;
+  decodeFunctionResult(
     functionFragment: "confidentialProtocolId",
     data: BytesLike
   ): Result;
+  decodeFunctionResult(
+    functionFragment: "createPaymentIntent",
+    data: BytesLike
+  ): Result;
   decodeFunctionResult(functionFragment: "deposit", data: BytesLike): Result;
+  decodeFunctionResult(
+    functionFragment: "executeIntent",
+    data: BytesLike
+  ): Result;
   decodeFunctionResult(
     functionFragment: "flowRegistry",
     data: BytesLike
@@ -196,6 +228,7 @@ export interface ConfidentialPaymentGateInterface extends Interface {
     data: BytesLike
   ): Result;
   decodeFunctionResult(functionFragment: "hasBalance", data: BytesLike): Result;
+  decodeFunctionResult(functionFragment: "intents", data: BytesLike): Result;
   decodeFunctionResult(
     functionFragment: "protocolNames",
     data: BytesLike
@@ -251,6 +284,59 @@ export namespace DepositedEvent {
   export type OutputTuple = [user: string, timestamp: bigint];
   export interface OutputObject {
     user: string;
+    timestamp: bigint;
+  }
+  export type Event = TypedContractEvent<InputTuple, OutputTuple, OutputObject>;
+  export type Filter = TypedDeferredTopicFilter<Event>;
+  export type Log = TypedEventLog<Event>;
+  export type LogDescription = TypedLogDescription<Event>;
+}
+
+export namespace PaymentIntentCancelledEvent {
+  export type InputTuple = [intentId: BytesLike];
+  export type OutputTuple = [intentId: string];
+  export interface OutputObject {
+    intentId: string;
+  }
+  export type Event = TypedContractEvent<InputTuple, OutputTuple, OutputObject>;
+  export type Filter = TypedDeferredTopicFilter<Event>;
+  export type Log = TypedEventLog<Event>;
+  export type LogDescription = TypedLogDescription<Event>;
+}
+
+export namespace PaymentIntentCreatedEvent {
+  export type InputTuple = [
+    intentId: BytesLike,
+    from: AddressLike,
+    to: AddressLike,
+    routingMode: BigNumberish,
+    expiresAt: BigNumberish
+  ];
+  export type OutputTuple = [
+    intentId: string,
+    from: string,
+    to: string,
+    routingMode: bigint,
+    expiresAt: bigint
+  ];
+  export interface OutputObject {
+    intentId: string;
+    from: string;
+    to: string;
+    routingMode: bigint;
+    expiresAt: bigint;
+  }
+  export type Event = TypedContractEvent<InputTuple, OutputTuple, OutputObject>;
+  export type Filter = TypedDeferredTopicFilter<Event>;
+  export type Log = TypedEventLog<Event>;
+  export type LogDescription = TypedLogDescription<Event>;
+}
+
+export namespace PaymentIntentSettledEvent {
+  export type InputTuple = [intentId: BytesLike, timestamp: BigNumberish];
+  export type OutputTuple = [intentId: string, timestamp: bigint];
+  export interface OutputObject {
+    intentId: string;
     timestamp: bigint;
   }
   export type Event = TypedContractEvent<InputTuple, OutputTuple, OutputObject>;
@@ -385,10 +471,34 @@ export interface ConfidentialPaymentGate extends BaseContract {
 
   cUSDT: TypedContractMethod<[], [string], "view">;
 
+  cancelIntent: TypedContractMethod<
+    [intentId: BytesLike],
+    [void],
+    "nonpayable"
+  >;
+
   confidentialProtocolId: TypedContractMethod<[], [bigint], "view">;
+
+  createPaymentIntent: TypedContractMethod<
+    [
+      to: AddressLike,
+      encryptedAmount: BytesLike,
+      inputProof: BytesLike,
+      routingMode: BigNumberish,
+      expiresAt: BigNumberish
+    ],
+    [string],
+    "nonpayable"
+  >;
 
   deposit: TypedContractMethod<
     [encryptedAmount: BytesLike, inputProof: BytesLike],
+    [void],
+    "nonpayable"
+  >;
+
+  executeIntent: TypedContractMethod<
+    [intentId: BytesLike],
     [void],
     "nonpayable"
   >;
@@ -404,6 +514,22 @@ export interface ConfidentialPaymentGate extends BaseContract {
   >;
 
   hasBalance: TypedContractMethod<[user: AddressLike], [boolean], "view">;
+
+  intents: TypedContractMethod<
+    [arg0: BytesLike],
+    [
+      [string, string, string, bigint, bigint, boolean, boolean] & {
+        from: string;
+        to: string;
+        encryptedAmount: string;
+        routingMode: bigint;
+        expiresAt: bigint;
+        executed: boolean;
+        cancelled: boolean;
+      }
+    ],
+    "view"
+  >;
 
   protocolNames: TypedContractMethod<[arg0: AddressLike], [string], "view">;
 
@@ -494,8 +620,24 @@ export interface ConfidentialPaymentGate extends BaseContract {
     nameOrSignature: "cUSDT"
   ): TypedContractMethod<[], [string], "view">;
   getFunction(
+    nameOrSignature: "cancelIntent"
+  ): TypedContractMethod<[intentId: BytesLike], [void], "nonpayable">;
+  getFunction(
     nameOrSignature: "confidentialProtocolId"
   ): TypedContractMethod<[], [bigint], "view">;
+  getFunction(
+    nameOrSignature: "createPaymentIntent"
+  ): TypedContractMethod<
+    [
+      to: AddressLike,
+      encryptedAmount: BytesLike,
+      inputProof: BytesLike,
+      routingMode: BigNumberish,
+      expiresAt: BigNumberish
+    ],
+    [string],
+    "nonpayable"
+  >;
   getFunction(
     nameOrSignature: "deposit"
   ): TypedContractMethod<
@@ -503,6 +645,9 @@ export interface ConfidentialPaymentGate extends BaseContract {
     [void],
     "nonpayable"
   >;
+  getFunction(
+    nameOrSignature: "executeIntent"
+  ): TypedContractMethod<[intentId: BytesLike], [void], "nonpayable">;
   getFunction(
     nameOrSignature: "flowRegistry"
   ): TypedContractMethod<[], [string], "view">;
@@ -519,6 +664,23 @@ export interface ConfidentialPaymentGate extends BaseContract {
   getFunction(
     nameOrSignature: "hasBalance"
   ): TypedContractMethod<[user: AddressLike], [boolean], "view">;
+  getFunction(
+    nameOrSignature: "intents"
+  ): TypedContractMethod<
+    [arg0: BytesLike],
+    [
+      [string, string, string, bigint, bigint, boolean, boolean] & {
+        from: string;
+        to: string;
+        encryptedAmount: string;
+        routingMode: bigint;
+        expiresAt: bigint;
+        executed: boolean;
+        cancelled: boolean;
+      }
+    ],
+    "view"
+  >;
   getFunction(
     nameOrSignature: "protocolNames"
   ): TypedContractMethod<[arg0: AddressLike], [string], "view">;
@@ -598,6 +760,27 @@ export interface ConfidentialPaymentGate extends BaseContract {
     DepositedEvent.OutputObject
   >;
   getEvent(
+    key: "PaymentIntentCancelled"
+  ): TypedContractEvent<
+    PaymentIntentCancelledEvent.InputTuple,
+    PaymentIntentCancelledEvent.OutputTuple,
+    PaymentIntentCancelledEvent.OutputObject
+  >;
+  getEvent(
+    key: "PaymentIntentCreated"
+  ): TypedContractEvent<
+    PaymentIntentCreatedEvent.InputTuple,
+    PaymentIntentCreatedEvent.OutputTuple,
+    PaymentIntentCreatedEvent.OutputObject
+  >;
+  getEvent(
+    key: "PaymentIntentSettled"
+  ): TypedContractEvent<
+    PaymentIntentSettledEvent.InputTuple,
+    PaymentIntentSettledEvent.OutputTuple,
+    PaymentIntentSettledEvent.OutputObject
+  >;
+  getEvent(
     key: "PaymentRouted"
   ): TypedContractEvent<
     PaymentRoutedEvent.InputTuple,
@@ -647,6 +830,39 @@ export interface ConfidentialPaymentGate extends BaseContract {
       DepositedEvent.InputTuple,
       DepositedEvent.OutputTuple,
       DepositedEvent.OutputObject
+    >;
+
+    "PaymentIntentCancelled(bytes32)": TypedContractEvent<
+      PaymentIntentCancelledEvent.InputTuple,
+      PaymentIntentCancelledEvent.OutputTuple,
+      PaymentIntentCancelledEvent.OutputObject
+    >;
+    PaymentIntentCancelled: TypedContractEvent<
+      PaymentIntentCancelledEvent.InputTuple,
+      PaymentIntentCancelledEvent.OutputTuple,
+      PaymentIntentCancelledEvent.OutputObject
+    >;
+
+    "PaymentIntentCreated(bytes32,address,address,uint8,uint256)": TypedContractEvent<
+      PaymentIntentCreatedEvent.InputTuple,
+      PaymentIntentCreatedEvent.OutputTuple,
+      PaymentIntentCreatedEvent.OutputObject
+    >;
+    PaymentIntentCreated: TypedContractEvent<
+      PaymentIntentCreatedEvent.InputTuple,
+      PaymentIntentCreatedEvent.OutputTuple,
+      PaymentIntentCreatedEvent.OutputObject
+    >;
+
+    "PaymentIntentSettled(bytes32,uint256)": TypedContractEvent<
+      PaymentIntentSettledEvent.InputTuple,
+      PaymentIntentSettledEvent.OutputTuple,
+      PaymentIntentSettledEvent.OutputObject
+    >;
+    PaymentIntentSettled: TypedContractEvent<
+      PaymentIntentSettledEvent.InputTuple,
+      PaymentIntentSettledEvent.OutputTuple,
+      PaymentIntentSettledEvent.OutputObject
     >;
 
     "PaymentRouted(address,address,uint8,uint256)": TypedContractEvent<

@@ -12,6 +12,14 @@ pragma solidity ^0.8.28;
  *     Mode 1 — Yield vault      (24-hour lock + 1% yield)
  *     Mode 2 — Vesting schedule (configurable cliff + linear duration)
  *
+ *   Payment Intents allow callers to commit a pre-encrypted amount
+ *   and a route that is settled later by the creator or an authorized
+ *   protocol:
+ *
+ *     createPaymentIntent() — encrypt once, settle anytime before expiry
+ *     executeIntent()       — settle by creator or authorized protocol
+ *     cancelIntent()        — creator cancels before settlement
+ *
  *   Authorized external protocols may call routeFromProtocol() to route
  *   through the same dispatch logic without going through the deposit flow.
  *
@@ -47,7 +55,8 @@ interface IConfidentialVestingModule {
 /*
  * @title ConfidentialPaymentGate
  * @notice Custodial gateway: users deposit cUSDT, then route payments confidentially.
- *         External protocols registered by the admin may also route via routeFromProtocol().
+ *         External protocols registered by the admin may also route via routeFromProtocol()
+ *         or execute Payment Intents created by users.
  */
 contract ConfidentialPaymentGate is ZamaEthereumConfig {
 
@@ -87,6 +96,20 @@ contract ConfidentialPaymentGate is ZamaEthereumConfig {
     mapping(address => string) public protocolNames;
     address[]                  private _protocolList;
 
+    /* ---- Payment Intents ---- */
+
+    struct PaymentIntent {
+        address from;
+        address to;
+        euint64 encryptedAmount;
+        uint8   routingMode;
+        uint256 expiresAt;
+        bool    executed;
+        bool    cancelled;
+    }
+
+    mapping(bytes32 => PaymentIntent) public intents;
+
     /* ------------------------------------------------------------------
      * Events
      * ------------------------------------------------------------------ */
@@ -106,6 +129,16 @@ contract ConfidentialPaymentGate is ZamaEthereumConfig {
     event AdminTransferred(address indexed oldAdmin, address indexed newAdmin);
     event ProtocolRegistered(address indexed protocol, string name);
     event ProtocolRevoked(address indexed protocol);
+
+    event PaymentIntentCreated(
+        bytes32 indexed intentId,
+        address indexed from,
+        address indexed to,
+        uint8   routingMode,
+        uint256 expiresAt
+    );
+    event PaymentIntentSettled(bytes32 indexed intentId, uint256 timestamp);
+    event PaymentIntentCancelled(bytes32 indexed intentId);
 
     /* ------------------------------------------------------------------
      * Modifiers
@@ -189,7 +222,8 @@ contract ConfidentialPaymentGate is ZamaEthereumConfig {
      * ------------------------------------------------------------------ */
 
     /*
-     * @notice Authorize an external protocol contract to call routeFromProtocol().
+     * @notice Authorize an external protocol contract to call routeFromProtocol()
+     *         and executeIntent().
      * @param protocol  Address of the protocol contract.
      * @param name      Human-readable name stored for off-chain indexers.
      */
@@ -376,12 +410,97 @@ contract ConfidentialPaymentGate is ZamaEthereumConfig {
     }
 
     /* ------------------------------------------------------------------
+     * Core — Payment Intents
+     * ------------------------------------------------------------------ */
+
+    /*
+     * @notice Commit a pre-encrypted amount for deferred routing.
+     *         The intent can be settled any time before expiresAt by the
+     *         creator or by any authorized protocol.
+     *
+     * @param to               Recipient address.
+     * @param encryptedAmount  Encrypted amount handle from the FHEVM SDK.
+     * @param inputProof       ZK proof for the encrypted amount.
+     * @param routingMode      Routing mode: 0=liquid, 1=yield, 2=vesting.
+     * @param expiresAt        Unix timestamp after which settlement reverts.
+     * @return intentId        keccak256 identifier for this intent.
+     */
+    function createPaymentIntent(
+        address         to,
+        externalEuint64 encryptedAmount,
+        bytes calldata  inputProof,
+        uint8           routingMode,
+        uint256         expiresAt
+    ) external returns (bytes32 intentId) {
+        require(expiresAt > block.timestamp, "ConfidentialPaymentGate: expiry must be in future");
+        require(to != address(0),            "ConfidentialPaymentGate: zero to address");
+        require(routingMode <= MODE_VESTING, "ConfidentialPaymentGate: invalid mode");
+
+        euint64 amount = FHE.fromExternal(encryptedAmount, inputProof);
+        /* Gate retains persistent ACL so executeIntent can reuse this handle. */
+        FHE.allowThis(amount);
+
+        intentId = keccak256(
+            abi.encodePacked(msg.sender, to, block.timestamp, block.prevrandao)
+        );
+
+        intents[intentId] = PaymentIntent({
+            from:            msg.sender,
+            to:              to,
+            encryptedAmount: amount,
+            routingMode:     routingMode,
+            expiresAt:       expiresAt,
+            executed:        false,
+            cancelled:       false
+        });
+
+        emit PaymentIntentCreated(intentId, msg.sender, to, routingMode, expiresAt);
+    }
+
+    /*
+     * @notice Settle a Payment Intent.
+     *         Caller must be the intent creator or an authorized protocol.
+     *         Reverts if the intent is already executed, cancelled, or expired.
+     *
+     * @param intentId  The identifier returned by createPaymentIntent.
+     */
+    function executeIntent(bytes32 intentId) external {
+        PaymentIntent storage intent = intents[intentId];
+        require(!intent.executed,                          "ConfidentialPaymentGate: already executed");
+        require(!intent.cancelled,                         "ConfidentialPaymentGate: cancelled");
+        require(block.timestamp <= intent.expiresAt,       "ConfidentialPaymentGate: intent expired");
+        require(
+            msg.sender == intent.from || authorizedProtocols[msg.sender],
+            "ConfidentialPaymentGate: not authorized"
+        );
+
+        intent.executed = true;
+        _executeRoute(intent.from, intent.to, intent.encryptedAmount, intent.routingMode);
+        emit PaymentIntentSettled(intentId, block.timestamp);
+    }
+
+    /*
+     * @notice Cancel a Payment Intent before it is executed.
+     *         Only the intent creator can cancel.
+     *
+     * @param intentId  The identifier returned by createPaymentIntent.
+     */
+    function cancelIntent(bytes32 intentId) external {
+        PaymentIntent storage intent = intents[intentId];
+        require(msg.sender == intent.from, "ConfidentialPaymentGate: not your intent");
+        require(!intent.executed,          "ConfidentialPaymentGate: already executed");
+        require(!intent.cancelled,         "ConfidentialPaymentGate: already cancelled");
+        intent.cancelled = true;
+        emit PaymentIntentCancelled(intentId);
+    }
+
+    /* ------------------------------------------------------------------
      * Internal — shared dispatch
      * ------------------------------------------------------------------ */
 
     /*
-     * @dev Shared dispatch logic used by both routePayment and routeFromProtocol.
-     *      Caller must ensure the gate holds ACL on sendAmt before calling.
+     * @dev Shared dispatch logic used by routePayment, routeFromProtocol,
+     *      and executeIntent. Caller must ensure the gate holds ACL on sendAmt.
      */
     function _executeRoute(
         address from,
