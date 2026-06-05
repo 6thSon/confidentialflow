@@ -32,12 +32,18 @@ export interface ConfidentialPaymentGateInterface extends Interface {
       | "MODE_VESTING"
       | "MODE_YIELD"
       | "admin"
+      | "authorizedProtocols"
       | "cUSDT"
       | "confidentialProtocolId"
       | "deposit"
       | "flowRegistry"
       | "getBalance"
+      | "getRegisteredProtocols"
       | "hasBalance"
+      | "protocolNames"
+      | "registerProtocol"
+      | "revokeProtocol"
+      | "routeFromProtocol"
       | "routePayment"
       | "sanctioned"
       | "setModules"
@@ -52,6 +58,8 @@ export interface ConfidentialPaymentGateInterface extends Interface {
       | "AdminTransferred"
       | "Deposited"
       | "PaymentRouted"
+      | "ProtocolRegistered"
+      | "ProtocolRevoked"
       | "SanctionUpdated"
   ): EventFragment;
 
@@ -76,6 +84,10 @@ export interface ConfidentialPaymentGateInterface extends Interface {
     values?: undefined
   ): string;
   encodeFunctionData(functionFragment: "admin", values?: undefined): string;
+  encodeFunctionData(
+    functionFragment: "authorizedProtocols",
+    values: [AddressLike]
+  ): string;
   encodeFunctionData(functionFragment: "cUSDT", values?: undefined): string;
   encodeFunctionData(
     functionFragment: "confidentialProtocolId",
@@ -94,8 +106,28 @@ export interface ConfidentialPaymentGateInterface extends Interface {
     values: [AddressLike]
   ): string;
   encodeFunctionData(
+    functionFragment: "getRegisteredProtocols",
+    values?: undefined
+  ): string;
+  encodeFunctionData(
     functionFragment: "hasBalance",
     values: [AddressLike]
+  ): string;
+  encodeFunctionData(
+    functionFragment: "protocolNames",
+    values: [AddressLike]
+  ): string;
+  encodeFunctionData(
+    functionFragment: "registerProtocol",
+    values: [AddressLike, string]
+  ): string;
+  encodeFunctionData(
+    functionFragment: "revokeProtocol",
+    values: [AddressLike]
+  ): string;
+  encodeFunctionData(
+    functionFragment: "routeFromProtocol",
+    values: [AddressLike, AddressLike, BytesLike, BigNumberish]
   ): string;
   encodeFunctionData(
     functionFragment: "routePayment",
@@ -144,6 +176,10 @@ export interface ConfidentialPaymentGateInterface extends Interface {
   ): Result;
   decodeFunctionResult(functionFragment: "MODE_YIELD", data: BytesLike): Result;
   decodeFunctionResult(functionFragment: "admin", data: BytesLike): Result;
+  decodeFunctionResult(
+    functionFragment: "authorizedProtocols",
+    data: BytesLike
+  ): Result;
   decodeFunctionResult(functionFragment: "cUSDT", data: BytesLike): Result;
   decodeFunctionResult(
     functionFragment: "confidentialProtocolId",
@@ -155,7 +191,27 @@ export interface ConfidentialPaymentGateInterface extends Interface {
     data: BytesLike
   ): Result;
   decodeFunctionResult(functionFragment: "getBalance", data: BytesLike): Result;
+  decodeFunctionResult(
+    functionFragment: "getRegisteredProtocols",
+    data: BytesLike
+  ): Result;
   decodeFunctionResult(functionFragment: "hasBalance", data: BytesLike): Result;
+  decodeFunctionResult(
+    functionFragment: "protocolNames",
+    data: BytesLike
+  ): Result;
+  decodeFunctionResult(
+    functionFragment: "registerProtocol",
+    data: BytesLike
+  ): Result;
+  decodeFunctionResult(
+    functionFragment: "revokeProtocol",
+    data: BytesLike
+  ): Result;
+  decodeFunctionResult(
+    functionFragment: "routeFromProtocol",
+    data: BytesLike
+  ): Result;
   decodeFunctionResult(
     functionFragment: "routePayment",
     data: BytesLike
@@ -228,12 +284,37 @@ export namespace PaymentRoutedEvent {
   export type LogDescription = TypedLogDescription<Event>;
 }
 
+export namespace ProtocolRegisteredEvent {
+  export type InputTuple = [protocol: AddressLike, name: string];
+  export type OutputTuple = [protocol: string, name: string];
+  export interface OutputObject {
+    protocol: string;
+    name: string;
+  }
+  export type Event = TypedContractEvent<InputTuple, OutputTuple, OutputObject>;
+  export type Filter = TypedDeferredTopicFilter<Event>;
+  export type Log = TypedEventLog<Event>;
+  export type LogDescription = TypedLogDescription<Event>;
+}
+
+export namespace ProtocolRevokedEvent {
+  export type InputTuple = [protocol: AddressLike];
+  export type OutputTuple = [protocol: string];
+  export interface OutputObject {
+    protocol: string;
+  }
+  export type Event = TypedContractEvent<InputTuple, OutputTuple, OutputObject>;
+  export type Filter = TypedDeferredTopicFilter<Event>;
+  export type Log = TypedEventLog<Event>;
+  export type LogDescription = TypedLogDescription<Event>;
+}
+
 export namespace SanctionUpdatedEvent {
-  export type InputTuple = [user: AddressLike, sanctioned: boolean];
-  export type OutputTuple = [user: string, sanctioned: boolean];
+  export type InputTuple = [user: AddressLike, status: boolean];
+  export type OutputTuple = [user: string, status: boolean];
   export interface OutputObject {
     user: string;
-    sanctioned: boolean;
+    status: boolean;
   }
   export type Event = TypedContractEvent<InputTuple, OutputTuple, OutputObject>;
   export type Filter = TypedDeferredTopicFilter<Event>;
@@ -296,6 +377,12 @@ export interface ConfidentialPaymentGate extends BaseContract {
 
   admin: TypedContractMethod<[], [string], "view">;
 
+  authorizedProtocols: TypedContractMethod<
+    [arg0: AddressLike],
+    [boolean],
+    "view"
+  >;
+
   cUSDT: TypedContractMethod<[], [string], "view">;
 
   confidentialProtocolId: TypedContractMethod<[], [bigint], "view">;
@@ -310,7 +397,38 @@ export interface ConfidentialPaymentGate extends BaseContract {
 
   getBalance: TypedContractMethod<[user: AddressLike], [string], "view">;
 
+  getRegisteredProtocols: TypedContractMethod<
+    [],
+    [[string[], string[]] & { protocols: string[]; names: string[] }],
+    "view"
+  >;
+
   hasBalance: TypedContractMethod<[user: AddressLike], [boolean], "view">;
+
+  protocolNames: TypedContractMethod<[arg0: AddressLike], [string], "view">;
+
+  registerProtocol: TypedContractMethod<
+    [protocol: AddressLike, name: string],
+    [void],
+    "nonpayable"
+  >;
+
+  revokeProtocol: TypedContractMethod<
+    [protocol: AddressLike],
+    [void],
+    "nonpayable"
+  >;
+
+  routeFromProtocol: TypedContractMethod<
+    [
+      from: AddressLike,
+      to: AddressLike,
+      encryptedAmount: BytesLike,
+      routingMode: BigNumberish
+    ],
+    [void],
+    "nonpayable"
+  >;
 
   routePayment: TypedContractMethod<
     [
@@ -370,6 +488,9 @@ export interface ConfidentialPaymentGate extends BaseContract {
     nameOrSignature: "admin"
   ): TypedContractMethod<[], [string], "view">;
   getFunction(
+    nameOrSignature: "authorizedProtocols"
+  ): TypedContractMethod<[arg0: AddressLike], [boolean], "view">;
+  getFunction(
     nameOrSignature: "cUSDT"
   ): TypedContractMethod<[], [string], "view">;
   getFunction(
@@ -389,8 +510,40 @@ export interface ConfidentialPaymentGate extends BaseContract {
     nameOrSignature: "getBalance"
   ): TypedContractMethod<[user: AddressLike], [string], "view">;
   getFunction(
+    nameOrSignature: "getRegisteredProtocols"
+  ): TypedContractMethod<
+    [],
+    [[string[], string[]] & { protocols: string[]; names: string[] }],
+    "view"
+  >;
+  getFunction(
     nameOrSignature: "hasBalance"
   ): TypedContractMethod<[user: AddressLike], [boolean], "view">;
+  getFunction(
+    nameOrSignature: "protocolNames"
+  ): TypedContractMethod<[arg0: AddressLike], [string], "view">;
+  getFunction(
+    nameOrSignature: "registerProtocol"
+  ): TypedContractMethod<
+    [protocol: AddressLike, name: string],
+    [void],
+    "nonpayable"
+  >;
+  getFunction(
+    nameOrSignature: "revokeProtocol"
+  ): TypedContractMethod<[protocol: AddressLike], [void], "nonpayable">;
+  getFunction(
+    nameOrSignature: "routeFromProtocol"
+  ): TypedContractMethod<
+    [
+      from: AddressLike,
+      to: AddressLike,
+      encryptedAmount: BytesLike,
+      routingMode: BigNumberish
+    ],
+    [void],
+    "nonpayable"
+  >;
   getFunction(
     nameOrSignature: "routePayment"
   ): TypedContractMethod<
@@ -452,6 +605,20 @@ export interface ConfidentialPaymentGate extends BaseContract {
     PaymentRoutedEvent.OutputObject
   >;
   getEvent(
+    key: "ProtocolRegistered"
+  ): TypedContractEvent<
+    ProtocolRegisteredEvent.InputTuple,
+    ProtocolRegisteredEvent.OutputTuple,
+    ProtocolRegisteredEvent.OutputObject
+  >;
+  getEvent(
+    key: "ProtocolRevoked"
+  ): TypedContractEvent<
+    ProtocolRevokedEvent.InputTuple,
+    ProtocolRevokedEvent.OutputTuple,
+    ProtocolRevokedEvent.OutputObject
+  >;
+  getEvent(
     key: "SanctionUpdated"
   ): TypedContractEvent<
     SanctionUpdatedEvent.InputTuple,
@@ -491,6 +658,28 @@ export interface ConfidentialPaymentGate extends BaseContract {
       PaymentRoutedEvent.InputTuple,
       PaymentRoutedEvent.OutputTuple,
       PaymentRoutedEvent.OutputObject
+    >;
+
+    "ProtocolRegistered(address,string)": TypedContractEvent<
+      ProtocolRegisteredEvent.InputTuple,
+      ProtocolRegisteredEvent.OutputTuple,
+      ProtocolRegisteredEvent.OutputObject
+    >;
+    ProtocolRegistered: TypedContractEvent<
+      ProtocolRegisteredEvent.InputTuple,
+      ProtocolRegisteredEvent.OutputTuple,
+      ProtocolRegisteredEvent.OutputObject
+    >;
+
+    "ProtocolRevoked(address)": TypedContractEvent<
+      ProtocolRevokedEvent.InputTuple,
+      ProtocolRevokedEvent.OutputTuple,
+      ProtocolRevokedEvent.OutputObject
+    >;
+    ProtocolRevoked: TypedContractEvent<
+      ProtocolRevokedEvent.InputTuple,
+      ProtocolRevokedEvent.OutputTuple,
+      ProtocolRevokedEvent.OutputObject
     >;
 
     "SanctionUpdated(address,bool)": TypedContractEvent<

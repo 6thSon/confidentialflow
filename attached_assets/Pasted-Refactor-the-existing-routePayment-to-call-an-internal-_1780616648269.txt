@@ -1,0 +1,32 @@
+Refactor the existing routePayment to call an internal _executeRoute function so both routePayment (user-facing) and routeFromProtocol (protocol-facing) share the same logic.
+
+Also add to the Admin Dashboard UI: a "Registered Protocols" section that lists all authorized protocols with their names and addresses, and an "Add Protocol" form (address + name input) that calls registerProtocol.
+
+--- MISSING FEATURE 2: Improve UI clarity with contextual labels ---
+
+Every section of the Send page must have plain-English explanations under the title. Not tooltips. Inline text. Specifically:
+
+Step 1: Below "Approve Gate as cUSDT Operator" add in gray text:
+"This is a one-time setup. You're giving the ConfidentialFlow contract permission to handle your cUSDT. Without this, payments cannot be processed. Contract: [show actual gate address with Etherscan link]"
+
+Step 2: Below "Deposit into Gate" add:
+"Load cUSDT into the payment contract. Your balance stays encrypted — only you can see it. This is like loading a prepaid card before you send."
+
+Step 3: Below "Route Payment" add:
+"Choose where your payment goes after it reaches the recipient:
+- Direct: Instant transfer to their wallet
+- Yield: Sent to an encrypted yield vault. They claim it later with a 1% bonus.
+- Vesting: Locked with a time schedule. They receive it gradually — useful for salaries or grants."
+
+The routing mode selector should NOT show "DirectYieldVesting" as a single string. It should be three clearly separated radio buttons with descriptions as above.
+
+--- AFTER ALL FIXES: Update the README ---
+
+Add a "How It Works" section with these exact headings:
+1. For Users — step by step what each button does in plain English
+2. For Developers — how to call routeFromProtocol from your own contract
+3. Architecture — the 4-contract diagram (ASCII is fine)
+4. Deployed Contracts — table of addresses on Sepolia with Etherscan links
+5. Known Limitations — be honest: yield is stubbed at 1%, vesting cliff is demo only, Relayer may have latency
+
+Do not remove any existing README content. Append this section at the top.

@@ -9,6 +9,62 @@ inside the FHE coprocessor.
 
 ---
 
+## How It Works
+
+### 1. Connect wallet and approve gate as cUSDT operator
+
+The user connects their Ethereum wallet via RainbowKit. Before any payment can flow, the
+ConfidentialPaymentGate contract must be approved as an ERC-7984 operator on the user's
+cUSDT balance. This is a one-time on-chain call to `cUSDT.setOperator(gateAddress, expiry)`.
+The approval is tracked in localStorage and verified against the chain so users never repeat
+it unnecessarily.
+
+### 2. Deposit — amount encrypted client-side before broadcast
+
+When the user deposits, the React frontend calls the Zama Relayer SDK (`@zama-fhe/relayer-sdk/web`)
+to encrypt the amount into an FHEVM-compatible `externalEuint64` handle plus a ZK proof, all
+inside the browser. The plaintext value never leaves the client. Only the encrypted handle and
+proof are submitted on-chain. The gate contract calls `FHE.fromExternal(handle, proof)` to
+verify and convert this into a gate-internal `euint64` balance entry.
+
+### 3. Route payment — recipient, encrypted amount, and routing mode
+
+The user fills in the recipient address, the amount to send (encrypted again by the SDK on
+submission), and one of three routing modes:
+
+- **Direct Transfer** — instant confidential cUSDT transfer to the recipient.
+- **Yield Vault** — funds locked for 24 hours; recipient claims principal + 1% yield.
+- **Vesting Schedule** — creates a 30-day cliff / 180-day linear vest for the recipient.
+
+External protocols registered by the admin can also trigger routing via
+`routeFromProtocol(from, to, encAmount, mode)` without going through the user deposit flow.
+
+### 4. Sanction filter and balance gate using `FHE.select` — no reverts
+
+Inside `routePayment`, two confidential guards run before dispatch:
+
+1. **Sanction gate** — if the sender is flagged, `FHE.select(notSanctioned, amount, 0)` silently
+   zeros the amount. The transaction succeeds; the on-chain observer cannot infer sanction status.
+2. **Balance gate** — `FHE.le(requestedAmt, balance)` checks sufficiency. If insufficient,
+   `FHE.select` again zeros the send amount. No on-chain revert, no information leak.
+
+Both guards are pure FHE operations — the results are never decrypted on-chain.
+
+### 5. Funds land in the appropriate module
+
+After the guards, `_executeRoute` dispatches:
+
+- **Mode 0 (Liquid)** → `cUSDT.confidentialTransfer(recipient, sendAmt)` directly.
+- **Mode 1 (Yield)** → transfers to `ConfidentialYieldVault`, which records the encrypted
+  deposit and releases principal + yield after the 24-hour lock expires.
+- **Mode 2 (Vesting)** → transfers to `ConfidentialVestingModule`, which creates a per-beneficiary
+  vesting schedule; tokens unlock linearly after the cliff.
+
+In every path, `FHE.allow(sendAmt, recipient)` grants the recipient the ACL needed to decrypt
+their received amount off-chain via the Zama Gateway.
+
+---
+
 ## Architecture overview
 
 ```
@@ -16,6 +72,7 @@ User → ConfidentialPaymentGate → Mode 0: direct cUSDT transfer
                                → Mode 1: ConfidentialYieldVault  (+1% after 24 h)
                                → Mode 2: ConfidentialVestingModule (cliff + linear)
                 FlowRegistry   ← per-sender routing config (plaintext)
+Protocol  ──(onlyAuthorizedProtocol)──► routeFromProtocol()
 ```
 
 See [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) for the full design and ACL patterns.
@@ -50,6 +107,7 @@ confidentialflow/
 │   └── src/
 │       ├── pages/           Send, Dashboard, Admin
 │       ├── components/      Layout, UI primitives
+│       ├── hooks/           useTransactionFlow
 │       └── lib/             wagmi config, contract ABIs, FHEVM helpers
 ├── docs/
 │   ├── ARCHITECTURE.md
@@ -121,7 +179,7 @@ pnpm --filter @workspace/app run dev
 | Contracts | Solidity ^0.8.28 |
 | Testing | Hardhat 2.x, `@fhevm/mock-utils`, ethers v6 |
 | Network | Ethereum Sepolia |
-| Frontend | React 18, Vite, wagmi, RainbowKit, viem |
+| Frontend | React 19, Vite 7, wagmi v2, RainbowKit v2, viem v2 |
 | Encryption client | `@zama-fhe/relayer-sdk` 0.4.1 |
 | Styling | Tailwind CSS v4, shadcn/ui |
 
@@ -135,6 +193,7 @@ pnpm --filter @workspace/app run dev
 - Vault claim follows CEI (Checks-Effects-Interactions): deposit slot is zeroed before the external cUSDT transfer.
 - No `TFHE.*` calls — exclusively `FHE.*` (FHEVM v0.11 API).
 - No `requestDecryption` on-chain — all decryption is user-initiated off-chain via the Zama Gateway.
+- Protocol registry uses `onlyAdmin` + swap-and-pop array management; revoked protocols are immediately denied.
 
 ---
 

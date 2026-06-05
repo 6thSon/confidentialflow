@@ -88,20 +88,20 @@ function VaultCard({ address }: { address: `0x${string}` }) {
           <span className="text-muted-foreground">Deposited amount</span>
           <EncryptedBadge />
         </div>
-        {hasDeposit && unlockTs > 0n && (
+        {!!hasDeposit && unlockTs > 0n ? (
           <div className="flex justify-between text-xs">
             <span className="text-muted-foreground">Unlocks at</span>
             <span className="font-mono text-foreground">
               {new Date(Number(unlockTs) * 1000).toLocaleString()}
             </span>
           </div>
-        )}
-        {hasDeposit && !unlocked && timeLeft > 0 && (
+        ) : null}
+        {!!hasDeposit && !unlocked && timeLeft > 0 ? (
           <div className="text-xs text-accent/80">{formatTimeLeft(timeLeft)}</div>
-        )}
+        ) : null}
       </div>
 
-      {hasDeposit && (
+      {!!hasDeposit ? (
         <button
           onClick={handleClaim}
           disabled={!unlocked || isPending || isConfirming}
@@ -115,7 +115,7 @@ function VaultCard({ address }: { address: `0x${string}` }) {
             <><Coins className="w-4 h-4" /> Claim with Yield</>
           )}
         </button>
-      )}
+      ) : null}
     </div>
   );
 }
@@ -190,17 +190,17 @@ function VestingCard({ address }: { address: `0x${string}` }) {
           <span className="text-muted-foreground">Already claimed</span>
           <EncryptedBadge />
         </div>
-        {cliff && (
+        {cliff ? (
           <div className="flex justify-between text-xs">
             <span className="text-muted-foreground">Cliff date</span>
             <span className="font-mono text-foreground">
               {new Date(Number(cliff) * 1000).toLocaleDateString()}
             </span>
           </div>
-        )}
+        ) : null}
       </div>
 
-      {hasSchedule && (
+      {!!hasSchedule ? (
         <button
           onClick={handleClaim}
           disabled={!pastCliff || isPending || isConfirming}
@@ -214,7 +214,7 @@ function VestingCard({ address }: { address: `0x${string}` }) {
             <><Clock className="w-4 h-4" /> Claim Vested Tokens</>
           )}
         </button>
-      )}
+      ) : null}
     </div>
   );
 }

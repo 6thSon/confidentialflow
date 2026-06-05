@@ -1,0 +1,27 @@
+The app has 4 critical issues and 2 missing architectural features. Fix them in this exact order.
+
+--- ISSUE 1: No transaction status feedback (highest priority) ---
+
+Every button that triggers a blockchain transaction must show a toast/modal with exactly 4 states:
+1. PENDING: "⏳ [Action name] pending — check your wallet to confirm"
+2. CONFIRMING: "🔄 Transaction submitted. Waiting for confirmation... (tx: 0x1234...abcd)" — show truncated hash with Etherscan link
+3. SUCCESS: "✅ [Action name] successful!" with a green checkmark and what happened next (e.g., "50 cUSDT deposited into Gate. Ready to route.")
+4. ERROR: "❌ Failed: [actual error message from the contract or RPC]" — never show a generic error, always show the real reason
+
+Implement this as a TransactionToast component using a simple state machine. Every button in the app uses this. No exceptions.
+
+Specifically for the three steps on the Send page:
+- Step 1 Approve: show "Approving ConfidentialPaymentGate (0x[contract address]) as operator on your cUSDT" — show the actual contract address so the user knows what they're approving
+- Step 2 Deposit: show the amount being deposited and the Gate address
+- Step 3 Route: show "Encrypting amount via Zama Relayer..." then "Encrypted. Sending transaction..." then success/fail
+
+--- ISSUE 2: Route Payment stuck in "Encrypting" state ---
+
+The Zama Relayer SDK encrypt call is hanging with no timeout and no error boundary.
+
+Fix it like this:
+1. Wrap the entire encrypt-then-send flow in a try/catch with a 30-second timeout
+2. If encrypt() takes more than 30 seconds, show error: "Encryption timed out. The Zama Relayer may be unavailable. Try again."
+3. After successful encryption, immediately show "Encrypted ✓ — sending transaction to wallet..." so the user knows the step completed
+4. If the wallet popup is rejected, catch the error and show "Transaction rejected by user"
+5. Check that the Relayer SDK is initialized with the correct Sepolia gateway URL: https://relayer.zama.ai — hardcode this as a constant, do not try to read it from env at runtime

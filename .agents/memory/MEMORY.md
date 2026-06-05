@@ -1,0 +1,5 @@
+- [wagmi string-ABI unknown types](wagmi-string-abi-types.md) — wagmi returns `unknown` for all view return values when ABI is a string array; cast or use `!!` before JSX use.
+- [relayer-sdk web export](relayer-sdk-web-export.md) — RelayerWeb is a runtime-only export from @zama-fhe/relayer-sdk/web; TS declaration omits it, so `// @ts-ignore` is required on the destructure line.
+- [encryptUint64 await bug](encrypt-await-bug.md) — input.encrypt() must be awaited (wrap in Promise.resolve + await); missing await causes silent hang in Encrypting state.
+- [FHEVM relayer URL](fhevm-relayer-url.md) — Hardcode gateway URL as `https://relayer.zama.ai`; old `https://gateway.sepolia.zama.ai/` is stale.
+- [Protocol Registry pattern](protocol-registry-pattern.md) — routeFromProtocol callers must call FHE.allowTransient(amount, gateAddr) before calling; gate does NOT check caller balance.

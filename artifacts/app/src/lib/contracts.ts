@@ -18,16 +18,36 @@ export type RoutingMode = typeof ROUTING_MODE[keyof typeof ROUTING_MODE];
 
 /* Minimal ABIs for UI interactions */
 export const GATE_ABI = [
+  /* Core payment functions */
   "function deposit(bytes32 encryptedAmount, bytes calldata inputProof) external",
   "function routePayment(address recipient, bytes32 encryptedAmount, bytes calldata inputProof, uint8 mode) external",
+
+  /* Protocol registry integration */
+  "function routeFromProtocol(address from, address to, bytes32 encryptedAmount, uint8 routingMode) external",
+
+  /* Balance / status queries */
   "function getBalance(address user) external view returns (bytes32)",
   "function hasBalance(address user) external view returns (bool)",
+
+  /* Sanction / admin */
   "function sanctioned(address user) external view returns (bool)",
   "function admin() external view returns (address)",
   "function setSanctioned(address user, bool status) external",
   "function transferAdmin(address newAdmin) external",
+  "function setModules(address yieldVault, address vestingModule) external",
+
+  /* Protocol registry admin */
+  "function authorizedProtocols(address protocol) external view returns (bool)",
+  "function protocolNames(address protocol) external view returns (string)",
+  "function registerProtocol(address protocol, string calldata name) external",
+  "function revokeProtocol(address protocol) external",
+  "function getRegisteredProtocols() external view returns (address[] memory protocols, string[] memory names)",
+
+  /* Events */
   "event Deposited(address indexed user, uint256 timestamp)",
   "event PaymentRouted(address indexed from, address indexed to, uint8 mode, uint256 timestamp)",
+  "event ProtocolRegistered(address indexed protocol, string name)",
+  "event ProtocolRevoked(address indexed protocol)",
 ] as const;
 
 export const VAULT_ABI = [
