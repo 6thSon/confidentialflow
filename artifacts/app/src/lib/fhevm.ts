@@ -1,7 +1,7 @@
 /* FHE client-side helpers — @zama-fhe/sdk v3 */
 
 import { createContext, useContext } from "react";
-import { RelayerWeb, indexedDBStorage } from "@zama-fhe/sdk";
+import { RelayerWeb, SepoliaConfig, indexedDBStorage } from "@zama-fhe/sdk";
 import { WagmiSignerV2 } from "@/lib/wagmiSigner";
 import { wagmiConfig } from "@/lib/wagmi";
 
@@ -9,8 +9,7 @@ import { wagmiConfig } from "@/lib/wagmi";
 /*  Chain configuration                                                 */
 /* ------------------------------------------------------------------ */
 
-const SEPOLIA_CHAIN_ID = 11155111;
-const RELAYER_URL = "https://relayer.testnet.zama.org";
+export const SEPOLIA_CHAIN_ID = 11155111;
 
 /* ------------------------------------------------------------------ */
 /*  Shared ZamaProvider dependencies — created once at module load      */
@@ -20,21 +19,23 @@ const RELAYER_URL = "https://relayer.testnet.zama.org";
 /*    - transports: Record<chainId, Partial<FhevmInstanceConfig>>       */
 /*      where FhevmInstanceConfig = { relayerUrl, network, ... }       */
 /*                                                                      */
-/*  RelayerWeb constructor starts WASM init in a Web Worker             */
-/*  immediately; .status goes idle → initializing → ready | error.     */
+/*  RelayerWeb is lazy: WASM worker does NOT start at construction.     */
+/*  Call getPublicParams() to trigger initialization.                   */
+/*  Status flow: idle → initializing → ready | error.                  */
 /* ------------------------------------------------------------------ */
 
 export const relayerInstance = new RelayerWeb({
   getChainId: () => Promise.resolve(SEPOLIA_CHAIN_ID),
   transports: {
     [SEPOLIA_CHAIN_ID]: {
-      relayerUrl: RELAYER_URL,
+      ...SepoliaConfig,
       network:
         (import.meta.env.VITE_SEPOLIA_RPC_URL as string | undefined) ??
-        "https://rpc.sepolia.org",
+        SepoliaConfig.network,
     },
   },
 });
+
 
 /* WagmiSignerV2: custom signer — see wagmiSigner.ts for why we don't use
    @zama-fhe/react-sdk/wagmi's WagmiSigner (uses removed wagmi v2 API) */

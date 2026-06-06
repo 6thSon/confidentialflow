@@ -12,6 +12,7 @@ import {
   relayerInstance,
   zamaSigner,
   zamaStorage,
+  SEPOLIA_CHAIN_ID,
   RelayerStatusContext,
   type RelayerStatus,
 } from "@/lib/fhevm";
@@ -46,14 +47,17 @@ function RouterWithZama() {
     let retries = 0;
     const MAX_RETRIES = 20;
 
-    async function tryInit() {
+    /* getPublicParams() triggers the WASM worker init.
+       Without it, RelayerWeb stays "idle" indefinitely (lazy init). */
+    async function kickInit() {
       try {
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        await (relayerInstance as any).init?.();
-      } catch (_) {}
+        await relayerInstance.getPublicParams(SEPOLIA_CHAIN_ID);
+      } catch (_) {
+        /* status will be "error"; the setInterval retry loop calls kickInit again */
+      }
     }
 
-    tryInit();
+    kickInit();
 
     id = setInterval(() => {
       const s = relayerInstance.status;
@@ -66,7 +70,7 @@ function RouterWithZama() {
           setRelayerStatus("error");
           clearInterval(id);
         } else {
-          tryInit();
+          kickInit();
         }
       }
     }, 500);

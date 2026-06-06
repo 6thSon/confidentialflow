@@ -75,6 +75,10 @@ export default defineConfig({
     port,
     host: "0.0.0.0",
     allowedHosts: true,
+    headers: {
+      "Cross-Origin-Embedder-Policy": "credentialless",
+      "Cross-Origin-Opener-Policy": "same-origin",
+    },
   },
   worker: {
     format: "es",
@@ -83,6 +87,7 @@ export default defineConfig({
     exclude: [
       "@zama-fhe/sdk",
       "@zama-fhe/react-sdk",
+      "@zama-fhe/relayer-sdk",
       "@zama-fhe/relayer-sdk/web",
       "@zama-fhe/relayer-sdk/bundle",
     ],
