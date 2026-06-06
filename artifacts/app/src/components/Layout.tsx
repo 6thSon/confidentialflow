@@ -1,6 +1,10 @@
+import { useState, useEffect } from "react";
 import { Link, useLocation } from "wouter";
 import { ConnectButton } from "@rainbow-me/rainbowkit";
 import { Shield, Send, LayoutDashboard, Settings, Lock } from "lucide-react";
+import { getRelayer } from "@/lib/fhevm";
+
+type RelayerStatus = "connecting" | "ready" | "error";
 
 const NAV_LINKS = [
   { href: "/",          label: "Send",      icon: Send },
@@ -8,8 +12,43 @@ const NAV_LINKS = [
   { href: "/admin",     label: "Admin",     icon: Settings },
 ];
 
+function RelayerDot({ status }: { status: RelayerStatus }) {
+  const map: Record<RelayerStatus, { color: string; label: string }> = {
+    connecting: { color: "bg-yellow-400", label: "Relayer connecting…" },
+    ready:      { color: "bg-emerald-400", label: "Relayer ready" },
+    error:      { color: "bg-red-500",    label: "Relayer not connected" },
+  };
+  const { color, label } = map[status];
+  return (
+    <span
+      title={label}
+      aria-label={label}
+      className="relative flex items-center justify-center w-5 h-5"
+    >
+      {status === "connecting" && (
+        <span
+          className={`absolute inline-flex h-3 w-3 rounded-full ${color} opacity-75 animate-ping`}
+        />
+      )}
+      <span className={`relative inline-flex rounded-full h-2.5 w-2.5 ${color}`} />
+    </span>
+  );
+}
+
 export default function Layout({ children }: { children: React.ReactNode }) {
   const [location] = useLocation();
+  const [relayerStatus, setRelayerStatus] = useState<RelayerStatus>("connecting");
+
+  /* Warm up the relayer on first render so it's ready before the user
+     clicks anything. A second getRelayer() call anywhere in the app
+     returns the already-resolved promise at near-zero cost. */
+  useEffect(() => {
+    let cancelled = false;
+    getRelayer()
+      .then(() => { if (!cancelled) setRelayerStatus("ready"); })
+      .catch(() => { if (!cancelled) setRelayerStatus("error"); });
+    return () => { cancelled = true; };
+  }, []);
 
   return (
     <div className="min-h-screen flex flex-col bg-background text-foreground">
@@ -48,12 +87,15 @@ export default function Layout({ children }: { children: React.ReactNode }) {
             })}
           </nav>
 
-          {/* Wallet */}
-          <ConnectButton
-            showBalance={false}
-            chainStatus="icon"
-            accountStatus="avatar"
-          />
+          {/* Relayer status dot + Wallet */}
+          <div className="flex items-center gap-3">
+            <RelayerDot status={relayerStatus} />
+            <ConnectButton
+              showBalance={false}
+              chainStatus="icon"
+              accountStatus="avatar"
+            />
+          </div>
         </div>
       </header>
 

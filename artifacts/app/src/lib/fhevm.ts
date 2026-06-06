@@ -6,7 +6,10 @@ const RELAYER_URL = "https://relayer.zama.ai";
 /* 30-second budget for any Relayer operation */
 const ENCRYPT_TIMEOUT_MS = 30_000;
 
+/* Singleton + dedup guard: a second call before the first resolves
+   returns the same promise instead of spawning a second create(). */
 let relayerInstance: any = null;
+let initPromise: Promise<any> | null = null;
 
 function withTimeout<T>(promise: Promise<T>, ms: number, label: string): Promise<T> {
   let id: ReturnType<typeof setTimeout>;
@@ -27,13 +30,21 @@ function withTimeout<T>(promise: Promise<T>, ms: number, label: string): Promise
 
 export async function getRelayer(): Promise<any> {
   if (relayerInstance) return relayerInstance;
+  if (initPromise) return initPromise;
 
   /* Use the /web subpath — the root package has no "." export.
    * RelayerWeb is a runtime export; the TS declaration file omits it. */
   // @ts-ignore
   const { RelayerWeb } = await import("@zama-fhe/relayer-sdk/web");
 
-  relayerInstance = await withTimeout(
+  if (!RelayerWeb) {
+    throw new Error(
+      "RelayerWeb not found in @zama-fhe/relayer-sdk/web. " +
+        "The SDK may have changed its export shape."
+    );
+  }
+
+  initPromise = withTimeout(
     RelayerWeb.create({
       gatewayUrl: RELAYER_URL,
       networkUrl:
@@ -41,9 +52,12 @@ export async function getRelayer(): Promise<any> {
     }),
     ENCRYPT_TIMEOUT_MS,
     "Relayer initialization"
-  );
+  ).then((instance: any) => {
+    relayerInstance = instance;
+    return instance;
+  });
 
-  return relayerInstance;
+  return initPromise;
 }
 
 export async function encryptUint64(

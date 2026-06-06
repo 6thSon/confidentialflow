@@ -6,7 +6,7 @@ import {
   CheckCircle2, ExternalLink, RefreshCw, CalendarClock, Copy
 } from "lucide-react";
 import { CONTRACT_ADDRESSES, GATE_ABI, CUSDT_ABI, ROUTING_MODE } from "@/lib/contracts";
-import { encryptUint64 } from "@/lib/fhevm";
+import { getRelayer, encryptUint64 } from "@/lib/fhevm";
 import { useTransactionFlow } from "@/hooks/useTransactionFlow";
 import { useToast } from "@/hooks/use-toast";
 
@@ -157,6 +157,17 @@ export default function SendPage() {
       return;
     }
 
+    try {
+      await getRelayer();
+    } catch (err: any) {
+      toast({
+        title: "❌ Relayer connection failed",
+        description: `${err.message}. Check your internet connection and try again.`,
+        variant: "destructive",
+      });
+      return;
+    }
+
     setEncryptState("encrypting");
     let handle: `0x${string}`, inputProof: `0x${string}`;
     try {
@@ -198,6 +209,17 @@ export default function SendPage() {
 
   async function handleSend() {
     if (!address || !amount || !recipient || !gateAddr) return;
+
+    try {
+      await getRelayer();
+    } catch (err: any) {
+      toast({
+        title: "❌ Relayer connection failed",
+        description: `${err.message}. Check your internet connection and try again.`,
+        variant: "destructive",
+      });
+      return;
+    }
 
     setEncryptState("encrypting");
     let handle: `0x${string}`, inputProof: `0x${string}`;
@@ -244,6 +266,17 @@ export default function SendPage() {
     const expiresAt = BigInt(Math.floor(new Date(intentExpiry).getTime() / 1000));
     if (expiresAt <= BigInt(Math.floor(Date.now() / 1000))) {
       toast({ title: "Invalid expiry", description: "Expiry must be in the future.", variant: "destructive" });
+      return;
+    }
+
+    try {
+      await getRelayer();
+    } catch (err: any) {
+      toast({
+        title: "❌ Relayer connection failed",
+        description: `${err.message}. Check your internet connection and try again.`,
+        variant: "destructive",
+      });
       return;
     }
 
