@@ -1,10 +1,7 @@
-import { useState, useEffect } from "react";
 import { Link, useLocation } from "wouter";
 import { ConnectButton } from "@rainbow-me/rainbowkit";
 import { Shield, Send, LayoutDashboard, Settings, Lock } from "lucide-react";
-import { getRelayer } from "@/lib/fhevm";
-
-type RelayerStatus = "connecting" | "ready" | "error";
+import { useRelayerStatus, type RelayerStatus } from "@/lib/fhevm";
 
 const NAV_LINKS = [
   { href: "/",          label: "Send",      icon: Send },
@@ -37,18 +34,7 @@ function RelayerDot({ status }: { status: RelayerStatus }) {
 
 export default function Layout({ children }: { children: React.ReactNode }) {
   const [location] = useLocation();
-  const [relayerStatus, setRelayerStatus] = useState<RelayerStatus>("connecting");
-
-  /* Warm up the relayer on first render so it's ready before the user
-     clicks anything. A second getRelayer() call anywhere in the app
-     returns the already-resolved promise at near-zero cost. */
-  useEffect(() => {
-    let cancelled = false;
-    getRelayer()
-      .then(() => { if (!cancelled) setRelayerStatus("ready"); })
-      .catch(() => { if (!cancelled) setRelayerStatus("error"); });
-    return () => { cancelled = true; };
-  }, []);
+  const relayerStatus = useRelayerStatus();
 
   return (
     <div className="min-h-screen flex flex-col bg-background text-foreground">

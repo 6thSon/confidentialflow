@@ -1,91 +1,63 @@
-/* FHE client-side helpers using @zama-fhe/relayer-sdk/web */
+/* FHE client-side helpers — @zama-fhe/sdk v3 */
 
-/* Hardcoded Zama Relayer endpoint — do not read from env at runtime */
+import { createContext, useContext } from "react";
+import { RelayerWeb, indexedDBStorage } from "@zama-fhe/sdk";
+import { WagmiSignerV2 } from "@/lib/wagmiSigner";
+import { wagmiConfig } from "@/lib/wagmi";
+
+/* ------------------------------------------------------------------ */
+/*  Chain configuration                                                 */
+/* ------------------------------------------------------------------ */
+
+const SEPOLIA_CHAIN_ID = 11155111;
 const RELAYER_URL = "https://relayer.zama.ai";
 
-/* 30-second budget for any Relayer operation */
-const ENCRYPT_TIMEOUT_MS = 30_000;
+/* ------------------------------------------------------------------ */
+/*  Shared ZamaProvider dependencies — created once at module load      */
+/*                                                                      */
+/*  RelayerWebConfig shape (SDK v3):                                    */
+/*    - getChainId: () => Promise<number>  — lazy chain ID resolver     */
+/*    - transports: Record<chainId, Partial<FhevmInstanceConfig>>       */
+/*      where FhevmInstanceConfig = { relayerUrl, network, ... }       */
+/*                                                                      */
+/*  RelayerWeb constructor starts WASM init in a Web Worker             */
+/*  immediately; .status goes idle → initializing → ready | error.     */
+/* ------------------------------------------------------------------ */
 
-/* Singleton + dedup guard: a second call before the first resolves
-   returns the same promise instead of spawning a second create(). */
-let relayerInstance: any = null;
-let initPromise: Promise<any> | null = null;
+export const relayerInstance = new RelayerWeb({
+  getChainId: () => Promise.resolve(SEPOLIA_CHAIN_ID),
+  transports: {
+    [SEPOLIA_CHAIN_ID]: {
+      relayerUrl: RELAYER_URL,
+      network:
+        (import.meta.env.VITE_SEPOLIA_RPC_URL as string | undefined) ??
+        "https://rpc.sepolia.org",
+    },
+  },
+});
 
-function withTimeout<T>(promise: Promise<T>, ms: number, label: string): Promise<T> {
-  let id: ReturnType<typeof setTimeout>;
-  const timeout = new Promise<never>((_, reject) => {
-    id = setTimeout(
-      () =>
-        reject(
-          new Error(
-            `${label} timed out after ${ms / 1000}s. ` +
-              "The Zama Relayer may be unavailable. Try again."
-          )
-        ),
-      ms
-    );
-  });
-  return Promise.race([promise, timeout]).finally(() => clearTimeout(id!));
-}
+/* WagmiSignerV2: custom signer — see wagmiSigner.ts for why we don't use
+   @zama-fhe/react-sdk/wagmi's WagmiSigner (uses removed wagmi v2 API) */
+export const zamaSigner = new WagmiSignerV2({ config: wagmiConfig });
 
-export async function getRelayer(): Promise<any> {
-  if (relayerInstance) return relayerInstance;
-  if (initPromise) return initPromise;
+/* indexedDBStorage is a pre-built GenericStorage singleton (not a factory) */
+export const zamaStorage = indexedDBStorage;
 
-  /* Use the /web subpath — the root package has no "." export.
-   * RelayerWeb is a runtime export; the TS declaration file omits it. */
-  // @ts-ignore
-  const { RelayerWeb } = await import("@zama-fhe/relayer-sdk/web");
+/* ------------------------------------------------------------------ */
+/*  Relayer status context                                              */
+/*  Provided by RouterWithZama in App.tsx; consumed by Layout.tsx.      */
+/*  Maps RelayerSDKStatus ("idle"|"initializing"|"ready"|"error")       */
+/*  to the three UI states the dot knows about.                        */
+/* ------------------------------------------------------------------ */
 
-  if (!RelayerWeb) {
-    throw new Error(
-      "RelayerWeb not found in @zama-fhe/relayer-sdk/web. " +
-        "The SDK may have changed its export shape."
-    );
-  }
+export type RelayerStatus = "connecting" | "ready" | "error";
+export const RelayerStatusContext = createContext<RelayerStatus>("connecting");
+export const useRelayerStatus = () => useContext(RelayerStatusContext);
 
-  initPromise = withTimeout(
-    RelayerWeb.create({
-      gatewayUrl: RELAYER_URL,
-      networkUrl:
-        import.meta.env.VITE_SEPOLIA_RPC_URL ?? "https://rpc.sepolia.org",
-    }),
-    ENCRYPT_TIMEOUT_MS,
-    "Relayer initialization"
-  ).then((instance: any) => {
-    relayerInstance = instance;
-    return instance;
-  });
+/* ------------------------------------------------------------------ */
+/*  Utilities                                                           */
+/* ------------------------------------------------------------------ */
 
-  return initPromise;
-}
-
-export async function encryptUint64(
-  value: bigint,
-  contractAddress: string,
-  userAddress: string,
-  onEncrypted?: () => void
-): Promise<{ handle: `0x${string}`; inputProof: `0x${string}` }> {
-  const relayer = await getRelayer();
-  const input = relayer.createEncryptedInput(contractAddress, userAddress);
-  input.add64(value);
-
-  /* encrypt() may be sync or async depending on SDK version — await both cases */
-  const { handles, inputProof } = await withTimeout(
-    Promise.resolve(input.encrypt()),
-    ENCRYPT_TIMEOUT_MS,
-    "Encryption"
-  );
-
-  onEncrypted?.();
-
-  return {
-    handle: handles[0] as `0x${string}`,
-    inputProof: inputProof as `0x${string}`,
-  };
-}
-
-/* Formats an encrypted handle for display */
 export function formatEncryptedHandle(handle: `0x${string}`): string {
   if (!handle || handle === "0x" + "0".repeat(64)) return "0x0000…0000";
   return handle.slice(0, 10) + "…" + handle.slice(-8);

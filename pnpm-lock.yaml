@@ -220,6 +220,13 @@ importers:
         version: 3.1.0
 
   artifacts/app:
+    dependencies:
+      '@zama-fhe/react-sdk':
+        specifier: ^3.0.1
+        version: 3.0.1(@tanstack/react-query@5.100.9(react@19.1.0))(@zama-fhe/sdk@3.0.1(@tanstack/query-core@5.100.9)(bufferutil@4.1.0)(ethers@6.16.0(bufferutil@4.1.0)(utf-8-validate@5.0.10))(utf-8-validate@5.0.10)(viem@2.52.0(bufferutil@4.1.0)(typescript@5.9.3)(utf-8-validate@5.0.10)(zod@3.25.76)))(react@19.1.0)(viem@2.52.0(bufferutil@4.1.0)(typescript@5.9.3)(utf-8-validate@5.0.10)(zod@3.25.76))(wagmi@2.19.5(@tanstack/query-core@5.100.9)(@tanstack/react-query@5.100.9(react@19.1.0))(@types/react@19.2.14)(bufferutil@4.1.0)(react@19.1.0)(typescript@5.9.3)(utf-8-validate@5.0.10)(viem@2.52.0(bufferutil@4.1.0)(typescript@5.9.3)(utf-8-validate@5.0.10)(zod@3.25.76))(zod@3.25.76))
+      '@zama-fhe/sdk':
+        specifier: ^3.0.1
+        version: 3.0.1(@tanstack/query-core@5.100.9)(bufferutil@4.1.0)(ethers@6.16.0(bufferutil@4.1.0)(utf-8-validate@5.0.10))(utf-8-validate@5.0.10)(viem@2.52.0(bufferutil@4.1.0)(typescript@5.9.3)(utf-8-validate@5.0.10)(zod@3.25.76))
     devDependencies:
       '@radix-ui/react-accordion':
         specifier: ^1.2.4
@@ -2420,10 +2427,43 @@ packages:
   '@walletconnect/window-metadata@1.0.1':
     resolution: {integrity: sha512-9koTqyGrM2cqFRW517BPY/iEtUDx2r1+Pwwu5m7sJ7ka79wi3EyqhqcICk/yDmv6jAS1rjKgTKXlEhanYjijcA==}
 
+  '@zama-fhe/react-sdk@3.0.1':
+    resolution: {integrity: sha512-VHJrqIAQg0O5EqPMtLFR/VP4A68G44heWpkUAhcjSmZuDSsRiPL4/4KRwVBJF2ivB9UC5qtwc3UD1EKMBOMYnA==}
+    engines: {node: '>=22'}
+    peerDependencies:
+      '@tanstack/react-query': '>=5'
+      '@zama-fhe/sdk': ^3.0.1
+      react: '>=18'
+      viem: ^2.47.0
+      wagmi: '>=2'
+    peerDependenciesMeta:
+      wagmi:
+        optional: true
+
   '@zama-fhe/relayer-sdk@0.4.1':
     resolution: {integrity: sha512-bS7tVQbXnsPFgiqm5R4pJ8hbPMYZuRh/Pv89S+jxO60y0mD296F4qIKEO7dgiHjC87V5GFM9DqCLNejjCNVw2Q==}
     engines: {node: '>=22'}
     hasBin: true
+
+  '@zama-fhe/relayer-sdk@0.4.3':
+    resolution: {integrity: sha512-/Lz+yBda4vppMx3FiCnqjRmBWxxEzGrcyOLeFQg1fqadnCWPU5GCmx7pSBQXesJHQz7MJ5hD07ERv2gdNjxv3w==}
+    engines: {node: '>=22'}
+    hasBin: true
+
+  '@zama-fhe/sdk@3.0.1':
+    resolution: {integrity: sha512-wca16KgwBcZU0dyzTVhmvumLc7D30SO59H7zvaDqcJY3wySdIA2xPzvko/KiwF4/zx7lXq9EQCoYSQNpxwMS3A==}
+    engines: {node: '>=22'}
+    peerDependencies:
+      '@tanstack/query-core': '>=5'
+      ethers: '>=6'
+      viem: '>=2'
+    peerDependenciesMeta:
+      '@tanstack/query-core':
+        optional: true
+      ethers:
+        optional: true
+      viem:
+        optional: true
 
   abitype@1.0.6:
     resolution: {integrity: sha512-MMSqYh4+C/aVqI2RQaWqbvI4Kxo5cQV40WQ4QFtDnNzCkqChm8MuENhElmynZlO0qUy/ObkEUaXtKqYnx1Kp3A==}
@@ -7972,6 +8012,15 @@ snapshots:
       '@walletconnect/window-getters': 1.0.1
       tslib: 1.14.1
 
+  '@zama-fhe/react-sdk@3.0.1(@tanstack/react-query@5.100.9(react@19.1.0))(@zama-fhe/sdk@3.0.1(@tanstack/query-core@5.100.9)(bufferutil@4.1.0)(ethers@6.16.0(bufferutil@4.1.0)(utf-8-validate@5.0.10))(utf-8-validate@5.0.10)(viem@2.52.0(bufferutil@4.1.0)(typescript@5.9.3)(utf-8-validate@5.0.10)(zod@3.25.76)))(react@19.1.0)(viem@2.52.0(bufferutil@4.1.0)(typescript@5.9.3)(utf-8-validate@5.0.10)(zod@3.25.76))(wagmi@2.19.5(@tanstack/query-core@5.100.9)(@tanstack/react-query@5.100.9(react@19.1.0))(@types/react@19.2.14)(bufferutil@4.1.0)(react@19.1.0)(typescript@5.9.3)(utf-8-validate@5.0.10)(viem@2.52.0(bufferutil@4.1.0)(typescript@5.9.3)(utf-8-validate@5.0.10)(zod@3.25.76))(zod@3.25.76))':
+    dependencies:
+      '@tanstack/react-query': 5.100.9(react@19.1.0)
+      '@zama-fhe/sdk': 3.0.1(@tanstack/query-core@5.100.9)(bufferutil@4.1.0)(ethers@6.16.0(bufferutil@4.1.0)(utf-8-validate@5.0.10))(utf-8-validate@5.0.10)(viem@2.52.0(bufferutil@4.1.0)(typescript@5.9.3)(utf-8-validate@5.0.10)(zod@3.25.76))
+      react: 19.1.0
+      viem: 2.52.0(bufferutil@4.1.0)(typescript@5.9.3)(utf-8-validate@5.0.10)(zod@3.25.76)
+    optionalDependencies:
+      wagmi: 2.19.5(@tanstack/query-core@5.100.9)(@tanstack/react-query@5.100.9(react@19.1.0))(@types/react@19.2.14)(bufferutil@4.1.0)(react@19.1.0)(typescript@5.9.3)(utf-8-validate@5.0.10)(viem@2.52.0(bufferutil@4.1.0)(typescript@5.9.3)(utf-8-validate@5.0.10)(zod@3.25.76))(zod@3.25.76)
+
   '@zama-fhe/relayer-sdk@0.4.1(bufferutil@4.1.0)(utf-8-validate@5.0.10)':
     dependencies:
       commander: 14.0.3
@@ -7983,6 +8032,32 @@ snapshots:
       tfhe: 1.4.0-alpha.3
       tkms: 0.12.8
       wasm-feature-detect: 1.8.0
+    transitivePeerDependencies:
+      - bufferutil
+      - utf-8-validate
+
+  '@zama-fhe/relayer-sdk@0.4.3(bufferutil@4.1.0)(utf-8-validate@5.0.10)':
+    dependencies:
+      commander: 14.0.3
+      ethers: 6.16.0(bufferutil@4.1.0)(utf-8-validate@5.0.10)
+      fetch-retry: 6.0.0
+      keccak: 3.0.4
+      node-tfhe: 1.4.0-alpha.3
+      node-tkms: 0.12.8
+      tfhe: 1.4.0-alpha.3
+      tkms: 0.12.8
+      wasm-feature-detect: 1.8.0
+    transitivePeerDependencies:
+      - bufferutil
+      - utf-8-validate
+
+  '@zama-fhe/sdk@3.0.1(@tanstack/query-core@5.100.9)(bufferutil@4.1.0)(ethers@6.16.0(bufferutil@4.1.0)(utf-8-validate@5.0.10))(utf-8-validate@5.0.10)(viem@2.52.0(bufferutil@4.1.0)(typescript@5.9.3)(utf-8-validate@5.0.10)(zod@3.25.76))':
+    dependencies:
+      '@zama-fhe/relayer-sdk': 0.4.3(bufferutil@4.1.0)(utf-8-validate@5.0.10)
+    optionalDependencies:
+      '@tanstack/query-core': 5.100.9
+      ethers: 6.16.0(bufferutil@4.1.0)(utf-8-validate@5.0.10)
+      viem: 2.52.0(bufferutil@4.1.0)(typescript@5.9.3)(utf-8-validate@5.0.10)(zod@3.25.76)
     transitivePeerDependencies:
       - bufferutil
       - utf-8-validate

@@ -80,6 +80,11 @@ export default defineConfig({
     format: "es",
   },
   optimizeDeps: {
-    exclude: ["@zama-fhe/relayer-sdk/web"],
+    exclude: [
+      "@zama-fhe/sdk",
+      "@zama-fhe/react-sdk",
+      "@zama-fhe/relayer-sdk/web",
+      "@zama-fhe/relayer-sdk/bundle",
+    ],
   },
 });

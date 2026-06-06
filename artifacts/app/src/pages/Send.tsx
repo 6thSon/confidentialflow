@@ -1,12 +1,13 @@
 import { useState, useEffect } from "react";
 import { useAccount, useReadContract } from "wagmi";
-import { parseUnits } from "viem";
+import { parseUnits, toHex } from "viem";
 import {
   Lock, ShieldCheck, ArrowRight, Send, Coins, Clock,
   CheckCircle2, ExternalLink, RefreshCw, CalendarClock, Copy
 } from "lucide-react";
+import { useEncrypt } from "@zama-fhe/react-sdk";
 import { CONTRACT_ADDRESSES, GATE_ABI, CUSDT_ABI, ROUTING_MODE } from "@/lib/contracts";
-import { getRelayer, encryptUint64 } from "@/lib/fhevm";
+import { formatEncryptedHandle } from "@/lib/fhevm";
 import { useTransactionFlow } from "@/hooks/useTransactionFlow";
 import { useToast } from "@/hooks/use-toast";
 
@@ -71,6 +72,10 @@ export default function SendPage() {
   const { toast } = useToast();
   const { flowState, isBusy, runTx, writeContractAsync } = useTransactionFlow();
 
+  /* useEncrypt() — must be at hook level; safe here because SendPage
+     only renders inside ZamaProvider (see RouterWithZama in App.tsx). */
+  const encrypt = useEncrypt();
+
   const [recipient, setRecipient]     = useState("");
   const [amount, setAmount]           = useState("");
   const [mode, setMode]               = useState<number>(ROUTING_MODE.LIQUID);
@@ -112,6 +117,30 @@ export default function SendPage() {
   const selectedIntentOption = ROUTING_OPTIONS.find(o => o.mode === intentMode)!;
   const isEncryptBusy        = encryptState !== "idle";
   const isIntentEncryptBusy  = intentEncryptState !== "idle";
+
+  /* ---------------------------------------------------------------- */
+  /*  Shared encrypt helper — wraps useEncrypt().mutateAsync           */
+  /* ---------------------------------------------------------------- */
+
+  async function fheEncrypt(
+    value: bigint,
+    contractAddress: `0x${string}`,
+    userAddress: `0x${string}`,
+  ) {
+    const result = await encrypt.mutateAsync({
+      values: [{ value, type: "euint64" as const }],
+      contractAddress,
+      userAddress,
+    });
+    /* handles are Address (0x${string}); cast via unknown for TS safety */
+    const handle = result.handles[0] as unknown as `0x${string}`;
+    /* inputProof is Uint8Array from the SDK — toHex returns 0x${string} */
+    const inputProof =
+      result.inputProof instanceof Uint8Array
+        ? toHex(result.inputProof)
+        : (result.inputProof as unknown as `0x${string}`);
+    return { handle, inputProof };
+  }
 
   /* ---------------------------------------------------------------- */
   /*  Step 1 — Approve operator                                        */
@@ -157,28 +186,15 @@ export default function SendPage() {
       return;
     }
 
-    try {
-      await getRelayer();
-    } catch (err: any) {
-      toast({
-        title: "❌ Relayer connection failed",
-        description: `${err.message}. Check your internet connection and try again.`,
-        variant: "destructive",
-      });
-      return;
-    }
-
     setEncryptState("encrypting");
     let handle: `0x${string}`, inputProof: `0x${string}`;
     try {
-      const result = await encryptUint64(
+      ({ handle, inputProof } = await fheEncrypt(
         parseUnits(amount, 6),
-        CONTRACT_ADDRESSES.gate,
+        gateAddr,
         address,
-        () => setEncryptState("encrypted")
-      );
-      handle = result.handle;
-      inputProof = result.inputProof;
+      ));
+      setEncryptState("encrypted");
     } catch (err: any) {
       setEncryptState("idle");
       toast({ title: "❌ Encryption failed", description: err.message, variant: "destructive" });
@@ -210,28 +226,15 @@ export default function SendPage() {
   async function handleSend() {
     if (!address || !amount || !recipient || !gateAddr) return;
 
-    try {
-      await getRelayer();
-    } catch (err: any) {
-      toast({
-        title: "❌ Relayer connection failed",
-        description: `${err.message}. Check your internet connection and try again.`,
-        variant: "destructive",
-      });
-      return;
-    }
-
     setEncryptState("encrypting");
     let handle: `0x${string}`, inputProof: `0x${string}`;
     try {
-      const result = await encryptUint64(
+      ({ handle, inputProof } = await fheEncrypt(
         parseUnits(amount, 6),
-        CONTRACT_ADDRESSES.gate,
+        gateAddr,
         address,
-        () => setEncryptState("encrypted")
-      );
-      handle = result.handle;
-      inputProof = result.inputProof;
+      ));
+      setEncryptState("encrypted");
     } catch (err: any) {
       setEncryptState("idle");
       toast({ title: "❌ Encryption failed", description: err.message, variant: "destructive" });
@@ -269,28 +272,15 @@ export default function SendPage() {
       return;
     }
 
-    try {
-      await getRelayer();
-    } catch (err: any) {
-      toast({
-        title: "❌ Relayer connection failed",
-        description: `${err.message}. Check your internet connection and try again.`,
-        variant: "destructive",
-      });
-      return;
-    }
-
     setIntentEncryptState("encrypting");
     let handle: `0x${string}`, inputProof: `0x${string}`;
     try {
-      const result = await encryptUint64(
+      ({ handle, inputProof } = await fheEncrypt(
         parseUnits(intentAmount, 6),
-        CONTRACT_ADDRESSES.gate,
+        gateAddr,
         address,
-        () => setIntentEncryptState("encrypted")
-      );
-      handle = result.handle;
-      inputProof = result.inputProof;
+      ));
+      setIntentEncryptState("encrypted");
     } catch (err: any) {
       setIntentEncryptState("idle");
       toast({ title: "❌ Encryption failed", description: err.message, variant: "destructive" });
@@ -314,12 +304,8 @@ export default function SendPage() {
 
     setIntentEncryptState("idle");
 
-    /* Store intent ID in localStorage for Dashboard to pick up.
-       The actual on-chain intentId is in the PaymentIntentCreated event;
-       we use the tx hash as a lookup key until the user can query it. */
     if (hash && address) {
       const stored: string[] = JSON.parse(localStorage.getItem(`cf_intents_${address}`) || "[]");
-      /* Store tx hash for now; Dashboard will look up the intentId from the receipt event */
       stored.push(hash);
       localStorage.setItem(`cf_intents_${address}`, JSON.stringify(stored));
       setLastIntentId(hash);
@@ -719,7 +705,7 @@ export default function SendPage() {
           )}
         </button>
 
-        {/* Success — show tx hash (intent ID retrievable from the event) */}
+        {/* Success — show tx hash */}
         {lastIntentId && (
           <div className="rounded-lg bg-chart-3/5 border border-chart-3/30 px-4 py-3 space-y-1">
             <p className="text-xs text-chart-3 font-medium flex items-center gap-1">

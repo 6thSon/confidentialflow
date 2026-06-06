@@ -19,7 +19,7 @@ Composable confidential payment rails on Zama FHEVM v0.11 — balances and trans
 
 - pnpm workspaces, Node.js 24, TypeScript 5.9
 - Frontend: React 19 + Vite 7, wagmi v2, RainbowKit v2, viem v2, Tailwind CSS v4
-- FHEVM client: `@zama-fhe/relayer-sdk` v0.4.1 (import via `/web` subpath)
+- FHEVM client: `@zama-fhe/sdk@^3` + `@zama-fhe/react-sdk@^3` (Token API + React hooks)
 - Smart contracts: Solidity 0.8.24, Hardhat, `@fhevm/solidity` v0.11.1, `@fhevm/hardhat-plugin`
 - API: Express 5, Drizzle ORM, PostgreSQL
 - **`contracts/` is a standalone npm project** (NOT in pnpm workspace) to avoid `@zama-fhe/relayer-sdk` version conflict
@@ -30,8 +30,8 @@ Composable confidential payment rails on Zama FHEVM v0.11 — balances and trans
 - `contracts/test/` — Hardhat TypeScript test files (38 tests)
 - `contracts/scripts/` — deploy.ts and seed.ts deployment scripts
 - `artifacts/app/src/pages/` — Send.tsx, Dashboard.tsx, Admin.tsx
-- `artifacts/app/src/lib/` — wagmi.ts (chain/wallet config), contracts.ts (ABIs), fhevm.ts (FHE encrypt helpers)
-- `artifacts/app/src/components/Layout.tsx` — top nav with RainbowKit wallet button
+- `artifacts/app/src/lib/` — wagmi.ts (chain/wallet config), contracts.ts (ABIs), fhevm.ts (FHE helpers), wagmiSigner.ts (custom GenericSigner)
+- `artifacts/app/src/components/Layout.tsx` — top nav with RainbowKit wallet button + relayer status dot
 - `docs/ARCHITECTURE.md`, `docs/DEMO_FLOW.md` — technical docs
 
 ## Architecture decisions
@@ -39,8 +39,11 @@ Composable confidential payment rails on Zama FHEVM v0.11 — balances and trans
 - All 4 FHE contracts inherit `ZamaEthereumConfig` (not `ZamaCoprocessorConfig`); FHE coprocessor is auto-configured per-network.
 - `FHE.fromExternal()` wraps every user-supplied encrypted input; `FHE.allowThis()` called after every stored encrypted value.
 - `FHE.select(ebool, a, b)` used for conditional logic instead of `require(ebool)` — required by FHEVM rules.
-- `@zama-fhe/relayer-sdk` must be imported as `@zama-fhe/relayer-sdk/web` (not bare) — the package has no root `"."` export.
 - `contracts/` uses `overrides: { "@zama-fhe/relayer-sdk": "0.4.1" }` in its own package.json to pin the version independently of the pnpm workspace.
+- Frontend uses `RelayerWeb` with `{ getChainId, transports: { [chainId]: { relayerUrl, network } } }` config (SDK v3 shape).
+- `WagmiSignerV2` (custom class in `wagmiSigner.ts`) replaces the broken `@zama-fhe/react-sdk/wagmi` `WagmiSigner` — see Known Limitations.
+- `useEncrypt()` from `@zama-fhe/react-sdk` returns a TanStack mutation; `inputProof` is `Uint8Array` and must be converted with `toHex()` from viem before passing to contracts.
+- Relayer status (idle → initializing → ready | error) is polled via `setInterval` in `RouterWithZama` and surfaced via `RelayerStatusContext`.
 
 ## Product
 
@@ -52,10 +55,19 @@ Composable confidential payment rails on Zama FHEVM v0.11 — balances and trans
 
 _Populate as you build — explicit user instructions worth remembering across sessions._
 
+## Known Limitations
+
+- **`@zama-fhe/react-sdk/wagmi` `WagmiSigner` is broken with wagmi v2**: it imports `watchConnection` from `wagmi/actions` which was removed in wagmi v2. `WagmiSignerV2` in `src/lib/wagmiSigner.ts` is a drop-in replacement implementing `GenericSigner` directly against wagmi v2 actions. The `subscribe()` method returns a no-op because wagmi v2 `Config` doesn't expose its Zustand store as a public API; this means FHE credentials are not automatically refreshed on wallet/chain change (expected on Sepolia — users re-connect to get a new session).
+- **Relayer WASM init is async**: `new RelayerWeb(config)` starts initialization in a Web Worker; the status dot goes yellow (initializing) → green (ready) → red (error). On Sepolia, expect 5–15 s for WASM + network handshake.
+- **`VITE_WALLETCONNECT_PROJECT_ID` is optional but recommended**: without it, WalletConnect shows a 403 from Reown's config endpoint. Injected wallets (MetaMask) work fine without it.
+
 ## Gotchas
 
-- `@zama-fhe/relayer-sdk/web` — use the `/web` subpath, not the bare package import. Vite throws "Missing '.' specifier" on the bare import.
-- Vite `optimizeDeps.exclude` must list `@zama-fhe/relayer-sdk/web` (the subpath), not the bare package name.
+- **`@zama-fhe/sdk` v3 `RelayerWebConfig`**: shape is `{ getChainId: () => Promise<number>, transports: Record<chainId, { relayerUrl, network }> }`. NOT `{ gatewayUrl, networkUrl }` (that was the old relayer-sdk v0.4 shape).
+- **`indexedDBStorage`** from `@zama-fhe/sdk` is a pre-built `GenericStorage` singleton — import it directly, do NOT call it as a function.
+- **`useEncrypt().mutateAsync` params**: `contractAddress` and `userAddress` must be `0x${string}` (Address type), not plain `string`.
+- **`inputProof` is `Uint8Array`**: convert with `toHex(inputProof)` from viem before passing to ABI-encoded contract calls.
+- Vite `optimizeDeps.exclude` must list `@zama-fhe/sdk` and `@zama-fhe/react-sdk` (bare package names) to prevent Vite from pre-bundling these ESM-native packages.
 - `contracts/` must NOT be added to pnpm-workspace.yaml — keep it as a standalone npm project.
 - `cd contracts && npm install` takes ~60 s on first run (downloads hardhat + fhevm toolchain).
 
