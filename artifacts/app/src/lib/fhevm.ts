@@ -10,7 +10,7 @@ import { wagmiConfig } from "@/lib/wagmi";
 /* ------------------------------------------------------------------ */
 
 const SEPOLIA_CHAIN_ID = 11155111;
-const RELAYER_URL = "https://relayer.zama.ai";
+const RELAYER_URL = "https://relayer.testnet.zama.org";
 
 /* ------------------------------------------------------------------ */
 /*  Shared ZamaProvider dependencies — created once at module load      */

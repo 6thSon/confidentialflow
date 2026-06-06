@@ -42,18 +42,32 @@ function RouterWithZama() {
   );
 
   useEffect(() => {
-    // Already settled — nothing to poll
-    const initial = relayerInstance.status;
-    if (initial === "ready" || initial === "error") return;
+    let id: ReturnType<typeof setInterval>;
+    let retries = 0;
+    const MAX_RETRIES = 20;
 
-    const id = setInterval(() => {
+    async function tryInit() {
+      try {
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        await (relayerInstance as any).init?.();
+      } catch (_) {}
+    }
+
+    tryInit();
+
+    id = setInterval(() => {
       const s = relayerInstance.status;
       if (s === "ready") {
         setRelayerStatus("ready");
         clearInterval(id);
       } else if (s === "error") {
-        setRelayerStatus("error");
-        clearInterval(id);
+        retries++;
+        if (retries >= MAX_RETRIES) {
+          setRelayerStatus("error");
+          clearInterval(id);
+        } else {
+          tryInit();
+        }
       }
     }, 500);
 
