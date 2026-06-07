@@ -132,8 +132,11 @@ export default function SendPage() {
       contractAddress,
       userAddress,
     });
-    /* handles are Address (0x${string}); cast via unknown for TS safety */
-    const handle = result.handles[0] as unknown as `0x${string}`;
+    /* handles[0] is Uint8Array from the SDK — must convert, not just cast */
+    const handle =
+      result.handles[0] instanceof Uint8Array
+        ? toHex(result.handles[0])
+        : (result.handles[0] as unknown as `0x${string}`);
     /* inputProof is Uint8Array from the SDK — toHex returns 0x${string} */
     const inputProof =
       result.inputProof instanceof Uint8Array
