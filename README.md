@@ -1,4 +1,4 @@
-# ConfidentialFlow — Composable Confidential Payment Rails
+# FortRail — Composable Confidential Payment Rails
 
 > Programmable encrypted payments on Zama FHEVM.
 > Send, route, and schedule private stablecoin transfers
@@ -7,7 +7,7 @@
 
 **Zama Season 3 Builder Track Submission**
 
-**[Live Demo → https://ConfidentialFlow.replit.app](https://ConfidentialFlow.replit.app)**
+**[Live Demo → https://fortrail.replit.app](https://fortrail.replit.app)**
 
 ---
 
@@ -15,7 +15,7 @@
 
 Public blockchains expose every transaction to anyone who looks. When you send USDT on Ethereum, the amount, recipient, and timing are all permanently visible on-chain — readable by competitors, counterparties, front-running bots, and surveillance tools alike. This makes DeFi effectively unusable for real institutional treasury flows, private payroll, confidential settlements, or any personal finance where financial privacy is a baseline expectation rather than an edge case.
 
-ConfidentialFlow solves this by encrypting every payment amount end-to-end using Fully Homomorphic Encryption before it ever touches the chain. Senders encrypt amounts in the browser; the ciphertext is all that is ever written to Ethereum state. The contracts compute yield, vesting fractions, sanction checks, and balance deductions entirely inside the FHE coprocessor — without any party ever decrypting the values. A Protocol Registry lets external dApps plug in and route payments without handling FHE themselves: they pass an encrypted handle they received from the user and the protocol does the rest.
+FortRail solves this by encrypting every payment amount end-to-end using Fully Homomorphic Encryption before it ever touches the chain. Senders encrypt amounts in the browser; the ciphertext is all that is ever written to Ethereum state. The contracts compute yield, vesting fractions, sanction checks, and balance deductions entirely inside the FHE coprocessor — without any party ever decrypting the values. A Protocol Registry lets external dApps plug in and route payments without handling FHE themselves: they pass an encrypted handle they received from the user and the protocol does the rest.
 
 ---
 
@@ -62,15 +62,15 @@ A PaymentIntent is a pre-authorized payment commitment stored on-chain. The send
 
 ## Deployed Contracts (Sepolia Testnet)
 
-Deployed by `0x14A905eE9F79F871EaeEA20Aa932292BC472B435` on 2026-06-05.
+Deployed by `0x14A905eE9F79F871EaeEA20Aa932292BC472B435` on 2026-06-09 (includes recipient sanction fix).
 
 | Contract | Address | Etherscan |
 |---|---|---|
-| ConfidentialPaymentGate | `0x78e9683ab9A62C8A1F12a72E05e209111f7bec40` | [view](https://sepolia.etherscan.io/address/0x78e9683ab9A62C8A1F12a72E05e209111f7bec40) |
-| ConfidentialYieldVault | `0xEC9dC67572704d219bfd03ED8Be0f4231f659a18` | [view](https://sepolia.etherscan.io/address/0xEC9dC67572704d219bfd03ED8Be0f4231f659a18) |
-| ConfidentialVestingModule | `0xCB9b04eaab3D3CBb29CA1dCEA666543D53e9d190` | [view](https://sepolia.etherscan.io/address/0xCB9b04eaab3D3CBb29CA1dCEA666543D53e9d190) |
-| FlowRegistry | `0xA55A0E3CE8d613E090580eB1f797579b192376E0` | [view](https://sepolia.etherscan.io/address/0xA55A0E3CE8d613E090580eB1f797579b192376E0) |
-| cUSDT (official Zama wrapper) | `0x9A2Bc655517d22CAC4a331Cfee6Fe7271f900Ec1` | [view](https://sepolia.etherscan.io/address/0x9A2Bc655517d22CAC4a331Cfee6Fe7271f900Ec1) |
+| ConfidentialPaymentGate | `0x017D063FFC967CE152380D0069887fec3B72489D` | [view](https://sepolia.etherscan.io/address/0x017D063FFC967CE152380D0069887fec3B72489D) |
+| ConfidentialYieldVault | `0x5b612335a8576823B03F63A448B3e3d35aC54cf6` | [view](https://sepolia.etherscan.io/address/0x5b612335a8576823B03F63A448B3e3d35aC54cf6) |
+| ConfidentialVestingModule | `0xa7a0490D06DD52F441e311d94B76fA3406B2B36e` | [view](https://sepolia.etherscan.io/address/0xa7a0490D06DD52F441e311d94B76fA3406B2B36e) |
+| FlowRegistry | `0x4FC4D74b0dED9AdF2f8f873ed340Bb675D354974` | [view](https://sepolia.etherscan.io/address/0x4FC4D74b0dED9AdF2f8f873ed340Bb675D354974) |
+| cUSDT (testnet MockERC7984) | `0xf863Ee1EfA501a027d5Ee74086d0D4FE8874Ea23` | [view](https://sepolia.etherscan.io/address/0xf863Ee1EfA501a027d5Ee74086d0D4FE8874Ea23) |
 
 ---
 
@@ -152,7 +152,7 @@ _Placeholder — fill after Sepolia deployment and live testing._
 
 ZK proofs verify that a static claim is true without revealing the underlying data. They work well for proving "I know a secret" or "this transaction is valid." But ZK cannot compute over shared, evolving state that multiple parties update over time — because someone has to know the plaintext to generate the proof. That makes ZK unsuitable anywhere the prover does not already hold all inputs in the clear.
 
-ConfidentialFlow's load-bearing computation is shared, evolving state. Multiple users deposit into the same yield vault. Routing percentages update per user independently. PaymentIntents are created by one party and executed by another who never held the plaintext amount. FHE lets the contract compute over all of this — additions, comparisons, divisions, conditional selects — without any party ever holding the plaintext. That is categorically impossible with ZK.
+FortRail's load-bearing computation is shared, evolving state. Multiple users deposit into the same yield vault. Routing percentages update per user independently. PaymentIntents are created by one party and executed by another who never held the plaintext amount. FHE lets the contract compute over all of this — additions, comparisons, divisions, conditional selects — without any party ever holding the plaintext. That is categorically impossible with ZK.
 
 ---
 

@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { useWriteContract, usePublicClient } from "wagmi";
 import { useToast } from "@/hooks/use-toast";
+import { addTxRecord } from "@/hooks/useTxHistory";
 
 export type TxFlowState = "idle" | "pending" | "confirming" | "success" | "error";
 
@@ -47,7 +48,6 @@ export function useTransactionFlow() {
 
     setFlowState("confirming");
     const short = `${hash.slice(0, 10)}...${hash.slice(-6)}`;
-    const explorerUrl = `https://sepolia.etherscan.io/tx/${hash}`;
     toast({
       title: "🔄 Transaction submitted",
       description: `Waiting for confirmation… (tx: ${short}) — view on Etherscan`,
@@ -57,6 +57,7 @@ export function useTransactionFlow() {
       if (!publicClient) throw new Error("No public client");
       await publicClient.waitForTransactionReceipt({ hash });
     } catch (err: any) {
+      addTxRecord({ action: actionName, status: "failed", txHash: hash });
       setFlowState("error");
       const raw = err?.shortMessage ?? err?.message ?? "Transaction reverted";
       toast({ title: "❌ Failed on-chain", description: raw, variant: "destructive" });
@@ -64,6 +65,7 @@ export function useTransactionFlow() {
       return null;
     }
 
+    addTxRecord({ action: actionName, status: "success", txHash: hash });
     setFlowState("success");
     toast({
       title: `✅ ${actionName} successful!`,

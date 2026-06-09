@@ -1,4 +1,5 @@
 import { useAccount, useReadContract, useWriteContract, useWaitForTransactionReceipt, usePublicClient } from "wagmi";
+import TxHistoryTable from "@/components/TxHistoryTable";
 import { Lock, Coins, Clock, Eye, EyeOff, RefreshCw, CheckCircle, CalendarClock, Trash2, PlayCircle } from "lucide-react";
 import { useState, useEffect } from "react";
 import { CONTRACT_ADDRESSES, VAULT_ABI, VESTING_ABI, GATE_ABI } from "@/lib/contracts";
@@ -496,6 +497,8 @@ export default function DashboardPage() {
           Only you can decrypt them using your wallet signature via the Zama Gateway.
         </p>
       </div>
+
+      <TxHistoryTable />
     </div>
   );
 }

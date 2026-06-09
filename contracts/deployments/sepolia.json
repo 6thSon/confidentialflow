@@ -1,13 +1,13 @@
 {
   "network": "sepolia",
   "chainId": 11155111,
-  "deployedAt": "2026-06-05T00:58:00.957Z",
+  "deployedAt": "2026-06-09T21:24:25.059Z",
   "deployer": "0x14A905eE9F79F871EaeEA20Aa932292BC472B435",
   "contracts": {
-    "cUSDT": "0x9A2Bc655517d22CAC4a331Cfee6Fe7271f900Ec1",
-    "yieldVault": "0xEC9dC67572704d219bfd03ED8Be0f4231f659a18",
-    "vestingModule": "0xCB9b04eaab3D3CBb29CA1dCEA666543D53e9d190",
-    "flowRegistry": "0xA55A0E3CE8d613E090580eB1f797579b192376E0",
-    "paymentGate": "0x78e9683ab9A62C8A1F12a72E05e209111f7bec40"
+    "cUSDT": "0xf863Ee1EfA501a027d5Ee74086d0D4FE8874Ea23",
+    "yieldVault": "0x5b612335a8576823B03F63A448B3e3d35aC54cf6",
+    "vestingModule": "0xa7a0490D06DD52F441e311d94B76fA3406B2B36e",
+    "flowRegistry": "0x4FC4D74b0dED9AdF2f8f873ed340Bb675D354974",
+    "paymentGate": "0x017D063FFC967CE152380D0069887fec3B72489D"
   }
 }

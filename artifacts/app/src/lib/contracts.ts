@@ -1,10 +1,10 @@
-/* Contract addresses — Sepolia deployment (2026-06-05) */
+/* Contract addresses — Sepolia deployment (2026-06-09, sanction-recipient fix) */
 export const CONTRACT_ADDRESSES = {
-  cUSDT:        "0x9A2Bc655517d22CAC4a331Cfee6Fe7271f900Ec1",
-  gate:         "0x78e9683ab9A62C8A1F12a72E05e209111f7bec40",
-  vault:        "0xEC9dC67572704d219bfd03ED8Be0f4231f659a18",
-  vesting:      "0xCB9b04eaab3D3CBb29CA1dCEA666543D53e9d190",
-  flowRegistry: "0xA55A0E3CE8d613E090580eB1f797579b192376E0",
+  cUSDT:        "0xf863Ee1EfA501a027d5Ee74086d0D4FE8874Ea23",
+  gate:         "0x017D063FFC967CE152380D0069887fec3B72489D",
+  vault:        "0x5b612335a8576823B03F63A448B3e3d35aC54cf6",
+  vesting:      "0xa7a0490D06DD52F441e311d94B76fA3406B2B36e",
+  flowRegistry: "0x4FC4D74b0dED9AdF2f8f873ed340Bb675D354974",
 } as const;
 
 /* Routing modes */

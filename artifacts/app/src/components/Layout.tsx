@@ -47,7 +47,7 @@ export default function Layout({ children }: { children: React.ReactNode }) {
               <Lock className="w-4 h-4 text-primary" />
             </div>
             <span className="font-bold text-base tracking-tight">
-              Confidential<span className="text-primary">Flow</span>
+              Fort<span className="text-primary">Rail</span>
             </span>
           </Link>
 

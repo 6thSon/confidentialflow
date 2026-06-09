@@ -508,15 +508,20 @@ contract ConfidentialPaymentGate is ZamaEthereumConfig {
         euint64 sendAmt,
         uint8   mode
     ) internal {
+        /* Recipient sanction filter — silently zero amount if recipient is sanctioned.
+         * Uses FHE.select so transaction observers cannot infer sanction status. */
+        ebool   recipientOk = FHE.not(FHE.asEbool(sanctioned[to]));
+        euint64 safeAmt     = FHE.select(recipientOk, sendAmt, FHE.asEuint64(0));
+
         if (mode == MODE_YIELD) {
             require(
                 address(yieldVault) != address(0),
                 "ConfidentialPaymentGate: vault not set"
             );
-            FHE.allowTransient(sendAmt, cUSDT);
-            IERC7984Minimal(cUSDT).confidentialTransfer(address(yieldVault), sendAmt);
-            FHE.allowTransient(sendAmt, address(yieldVault));
-            yieldVault.deposit(to, sendAmt);
+            FHE.allowTransient(safeAmt, cUSDT);
+            IERC7984Minimal(cUSDT).confidentialTransfer(address(yieldVault), safeAmt);
+            FHE.allowTransient(safeAmt, address(yieldVault));
+            yieldVault.deposit(to, safeAmt);
 
         } else if (mode == MODE_VESTING) {
             require(
@@ -525,19 +530,19 @@ contract ConfidentialPaymentGate is ZamaEthereumConfig {
             );
             uint256 cliffTs      = block.timestamp + DEFAULT_CLIFF_OFFSET;
             uint256 vestDuration = DEFAULT_VEST_DURATION;
-            FHE.allowTransient(sendAmt, cUSDT);
-            IERC7984Minimal(cUSDT).confidentialTransfer(address(vestingModule), sendAmt);
-            FHE.allowTransient(sendAmt, address(vestingModule));
-            vestingModule.createVest(to, sendAmt, cliffTs, vestDuration);
+            FHE.allowTransient(safeAmt, cUSDT);
+            IERC7984Minimal(cUSDT).confidentialTransfer(address(vestingModule), safeAmt);
+            FHE.allowTransient(safeAmt, address(vestingModule));
+            vestingModule.createVest(to, safeAmt, cliffTs, vestDuration);
 
         } else {
             /* MODE_LIQUID: direct confidential transfer to recipient. */
-            FHE.allowTransient(sendAmt, cUSDT);
-            IERC7984Minimal(cUSDT).confidentialTransfer(to, sendAmt);
+            FHE.allowTransient(safeAmt, cUSDT);
+            IERC7984Minimal(cUSDT).confidentialTransfer(to, safeAmt);
         }
 
         /* Allow recipient to decrypt the sent amount for their own records. */
-        FHE.allow(sendAmt, to);
+        FHE.allow(safeAmt, to);
 
         emit PaymentRouted(from, to, mode, block.timestamp);
     }

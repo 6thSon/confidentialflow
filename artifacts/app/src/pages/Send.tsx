@@ -10,6 +10,7 @@ import { CONTRACT_ADDRESSES, GATE_ABI, CUSDT_ABI, ROUTING_MODE } from "@/lib/con
 import { formatEncryptedHandle } from "@/lib/fhevm";
 import { useTransactionFlow } from "@/hooks/useTransactionFlow";
 import { useToast } from "@/hooks/use-toast";
+import TxHistoryTable from "@/components/TxHistoryTable";
 
 /* ------------------------------------------------------------------ */
 /*  Routing option definitions                                          */
@@ -732,6 +733,8 @@ export default function SendPage() {
           </div>
         )}
       </div>
+
+      <TxHistoryTable />
     </div>
   );
 }
