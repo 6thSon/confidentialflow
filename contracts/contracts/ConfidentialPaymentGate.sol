@@ -350,30 +350,30 @@ contract ConfidentialPaymentGate is ZamaEthereumConfig {
     ) external {
         require(recipient != address(0), "ConfidentialPaymentGate: zero recipient");
         require(mode <= MODE_VESTING,    "ConfidentialPaymentGate: invalid mode");
+
+        /* Sanction check FIRST — before balance check so the correct error is returned. */
+        require(!sanctioned[msg.sender], "Sender is sanctioned");
+
         require(_hasBalance[msg.sender], "ConfidentialPaymentGate: no deposit");
 
         /* Step 1: Decrypt user-supplied amount; gate receives transient ACL. */
         euint64 requestedAmt = FHE.fromExternal(encryptedAmount, inputProof);
 
-        /* Step 2: Sanction filter (FHE.select — no revert). */
-        ebool   notSanctioned = FHE.asEbool(!sanctioned[msg.sender]);
-        euint64 sanitizedAmt  = FHE.select(notSanctioned, requestedAmt, FHE.asEuint64(0));
-
-        /* Step 3: Balance-sufficiency gate. */
-        ebool   hasEnough   = FHE.le(sanitizedAmt, _balances[msg.sender]);
-        euint64 sendAmt     = FHE.select(hasEnough, sanitizedAmt, FHE.asEuint64(0));
-        euint64 newBalance  = FHE.select(
+        /* Step 2: Balance-sufficiency gate (FHE.select — no revert on insufficient funds). */
+        ebool   hasEnough  = FHE.le(requestedAmt, _balances[msg.sender]);
+        euint64 sendAmt    = FHE.select(hasEnough, requestedAmt, FHE.asEuint64(0));
+        euint64 newBalance = FHE.select(
             hasEnough,
-            FHE.sub(_balances[msg.sender], sanitizedAmt),
+            FHE.sub(_balances[msg.sender], requestedAmt),
             _balances[msg.sender]
         );
 
-        /* Step 4: Persist updated sender balance. */
+        /* Step 3: Persist updated sender balance. */
         FHE.allowThis(newBalance);
         FHE.allow(newBalance, msg.sender);
         _balances[msg.sender] = newBalance;
 
-        /* Step 5: Dispatch via shared routing logic. */
+        /* Step 4: Dispatch via shared routing logic. */
         _executeRoute(msg.sender, recipient, sendAmt, mode);
     }
 
@@ -508,20 +508,20 @@ contract ConfidentialPaymentGate is ZamaEthereumConfig {
         euint64 sendAmt,
         uint8   mode
     ) internal {
-        /* Recipient sanction filter — silently zero amount if recipient is sanctioned.
-         * Uses FHE.select so transaction observers cannot infer sanction status. */
-        ebool   recipientOk = FHE.not(FHE.asEbool(sanctioned[to]));
-        euint64 safeAmt     = FHE.select(recipientOk, sendAmt, FHE.asEuint64(0));
+        /* Sanction checks — plain require() because sanction status is public.
+         * Covers routeFromProtocol and executeIntent paths in addition to routePayment. */
+        require(!sanctioned[from], "Sender is sanctioned");
+        require(!sanctioned[to],   "Recipient is sanctioned");
 
         if (mode == MODE_YIELD) {
             require(
                 address(yieldVault) != address(0),
                 "ConfidentialPaymentGate: vault not set"
             );
-            FHE.allowTransient(safeAmt, cUSDT);
-            IERC7984Minimal(cUSDT).confidentialTransfer(address(yieldVault), safeAmt);
-            FHE.allowTransient(safeAmt, address(yieldVault));
-            yieldVault.deposit(to, safeAmt);
+            FHE.allowTransient(sendAmt, cUSDT);
+            IERC7984Minimal(cUSDT).confidentialTransfer(address(yieldVault), sendAmt);
+            FHE.allowTransient(sendAmt, address(yieldVault));
+            yieldVault.deposit(to, sendAmt);
 
         } else if (mode == MODE_VESTING) {
             require(
@@ -530,19 +530,19 @@ contract ConfidentialPaymentGate is ZamaEthereumConfig {
             );
             uint256 cliffTs      = block.timestamp + DEFAULT_CLIFF_OFFSET;
             uint256 vestDuration = DEFAULT_VEST_DURATION;
-            FHE.allowTransient(safeAmt, cUSDT);
-            IERC7984Minimal(cUSDT).confidentialTransfer(address(vestingModule), safeAmt);
-            FHE.allowTransient(safeAmt, address(vestingModule));
-            vestingModule.createVest(to, safeAmt, cliffTs, vestDuration);
+            FHE.allowTransient(sendAmt, cUSDT);
+            IERC7984Minimal(cUSDT).confidentialTransfer(address(vestingModule), sendAmt);
+            FHE.allowTransient(sendAmt, address(vestingModule));
+            vestingModule.createVest(to, sendAmt, cliffTs, vestDuration);
 
         } else {
             /* MODE_LIQUID: direct confidential transfer to recipient. */
-            FHE.allowTransient(safeAmt, cUSDT);
-            IERC7984Minimal(cUSDT).confidentialTransfer(to, safeAmt);
+            FHE.allowTransient(sendAmt, cUSDT);
+            IERC7984Minimal(cUSDT).confidentialTransfer(to, sendAmt);
         }
 
         /* Allow recipient to decrypt the sent amount for their own records. */
-        FHE.allow(safeAmt, to);
+        FHE.allow(sendAmt, to);
 
         emit PaymentRouted(from, to, mode, block.timestamp);
     }
