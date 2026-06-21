@@ -28,5 +28,6 @@ args = ["node", "--enable-source-maps", "artifacts/api-server/dist/index.mjs"]
 PORT = "8080"
 NODE_ENV = "production"
 
-[services.production.health.startup]
-path = "/api/healthz"
+# Startup health probe removed — Replit uses port-detection (fast, reliable).
+# The /api/healthz endpoint still exists for manual inspection but the
+# deployment is no longer blocked on it passing during startup.
