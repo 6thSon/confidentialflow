@@ -1,0 +1,78 @@
+The Vercel deployment is failing because Vercel imported the 
+wrong folder — it's trying to build artifacts/api-server 
+instead of the frontend.
+
+Fix this by creating a correct root-level vercel.json that 
+tells Vercel exactly what to build and where to find output:
+
+Create vercel.json in the workspace root (not inside any 
+subfolder) with this exact content:
+
+{
+  "version": 2,
+  "builds": [
+    {
+      "src": "artifacts/app/package.json",
+      "use": "@vercel/static-build",
+      "config": {
+        "distDir": "dist/public"
+      }
+    }
+  ],
+  "routes": [
+    {
+      "src": "/(.*)",
+      "dest": "/artifacts/app/dist/public/$1"
+    }
+  ],
+  "headers": [
+    {
+      "source": "/(.*)",
+      "headers": [
+        {
+          "key": "Cross-Origin-Opener-Policy",
+          "value": "same-origin"
+        },
+        {
+          "key": "Cross-Origin-Embedder-Policy", 
+          "value": "require-corp"
+        }
+      ]
+    }
+  ]
+}
+
+Also check if artifacts/app/package.json has a "build" script.
+If the build script outputs to dist/public, use that.
+If it outputs to dist, change distDir to "dist".
+
+Run: cd artifacts/app && npm run build
+Check where the output files actually land:
+ls artifacts/app/dist/
+or
+ls artifacts/app/dist/public/
+
+Update distDir in vercel.json to match the actual output path.
+
+Then push to GitHub:
+git add vercel.json
+git commit -m "fix: correct Vercel config to build frontend only"
+git push origin main --force
+
+After pushing, go to vercel.com:
+1. Delete the broken deployment project
+2. Create new project
+3. Import github.com/6thSon/confidentialflow
+4. Set Root Directory to: artifacts/app
+5. Framework: Vite
+6. Build command: npm run build
+7. Output directory: dist/public (or dist — whichever the 
+   build actually produces)
+8. Add environment variable: 
+   VITE_SEPOLIA_RPC_URL = https://eth-sepolia.g.alchemy.com/v2/xQZmDzEwuI70MbkBmC7Da
+9. Deploy
+
+Setting Root Directory to artifacts/app means Vercel only 
+sees the frontend folder and never touches api-server.
+
+Report: what is the Vercel URL after successful deployment?

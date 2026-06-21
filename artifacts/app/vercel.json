@@ -1,8 +1,7 @@
 {
   "installCommand": "cd ../.. && pnpm install",
-  "buildCommand": "cd ../.. && pnpm --filter @workspace/app run build",
+  "buildCommand": "pnpm run build",
   "outputDirectory": "dist/public",
-  "framework": null,
   "headers": [
     {
       "source": "/(.*)",

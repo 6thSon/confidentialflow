@@ -2,7 +2,6 @@
   "installCommand": "pnpm install",
   "buildCommand": "pnpm --filter @workspace/app run build",
   "outputDirectory": "artifacts/app/dist/public",
-  "framework": null,
   "headers": [
     {
       "source": "/(.*)",
